@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: teamup-mcp-oauth
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TEAMUP_CLIENT_ID
+        sync: false
+      - key: TEAMUP_CLIENT_SECRET
+        sync: false
+      - key: TEAMUP_REDIRECT_URI
+        sync: false
+      - key: TEAMUP_PROVIDER_ID
+        sync: false
