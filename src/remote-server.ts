@@ -137,6 +137,7 @@ console.log('TEAMUP_AUTH_MODE:', process.env.TEAMUP_AUTH_MODE);
 console.log('TEAMUP_ACCESS_TOKEN exists:', !!process.env.TEAMUP_ACCESS_TOKEN);
 console.log('TEAMUP_ACCESS_TOKEN length:', process.env.TEAMUP_ACCESS_TOKEN?.length);
 console.log('TEAMUP_PROVIDER_ID:', process.env.TEAMUP_PROVIDER_ID);
+console.log('TEAMUP_REQUEST_MODE:', process.env.TEAMUP_REQUEST_MODE);
 console.log('All TEAMUP env vars:', Object.keys(process.env).filter(k => k.startsWith('TEAMUP')));
 console.log('All RAILWAY env vars:', Object.keys(process.env).filter(k => k.includes('RAILWAY')));
 console.log('Total env vars count:', Object.keys(process.env).length);
@@ -162,7 +163,8 @@ const config: TeamUpConfig = {
 console.log('=== TeamUp Configuration ===');
 console.log('Auth Mode:', config.authMode);
 console.log('Request Mode:', config.requestMode);
-console.log('Provider ID exists:', !!config.providerId);
+console.log('Provider ID:', config.providerId);
+console.log('Provider ID type:', typeof config.providerId);
 console.log('Access Token exists:', !!config.accessToken);
 console.log('Base URL:', config.baseUrl);
 console.log('===========================');
@@ -595,7 +597,7 @@ app.post('/mcp/sse', async (req, res) => {
     headers: {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
-      ...(config.providerId && { 'TeamUp-Provider-ID': config.providerId }),
+      ...(config.providerId && { 'TeamUp-Provider-ID': String(config.providerId) }),
       'TeamUp-Request-Mode': config.requestMode
     },
     timeout: 30000
@@ -891,7 +893,7 @@ async function handleOpenAIMCP(req: any, res: any, session: UserSession) {
     headers: {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
-      ...(config.providerId && { 'TeamUp-Provider-ID': config.providerId }),
+      ...(config.providerId && { 'TeamUp-Provider-ID': String(config.providerId) }),
       'TeamUp-Request-Mode': config.requestMode
     },
     timeout: 30000
@@ -1165,15 +1167,22 @@ app.get('/api/events', async (req, res) => {
       });
     }
 
+    const headers = {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      'Authorization': `Token ${config.accessToken}`,
+      ...(config.providerId && { 'TeamUp-Provider-ID': String(config.providerId) }),
+      'TeamUp-Request-Mode': config.requestMode
+    };
+    
+    console.log('[API] /api/events headers:', {
+      ...headers,
+      'Authorization': `Token ${config.accessToken ? '[REDACTED]' : 'missing'}`
+    });
+    
     const axiosInstance = axios.create({
       baseURL: config.baseUrl,
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'Authorization': `Token ${config.accessToken}`,
-        ...(config.providerId && { 'TeamUp-Provider-ID': config.providerId }),
-        'TeamUp-Request-Mode': config.requestMode
-      }
+      headers
     });
 
     const response = await axiosInstance.get('/events', {
@@ -1207,7 +1216,7 @@ app.get('/api/customers', async (req, res) => {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
         'Authorization': `Token ${config.accessToken}`,
-        ...(config.providerId && { 'TeamUp-Provider-ID': config.providerId }),
+        ...(config.providerId && { 'TeamUp-Provider-ID': String(config.providerId) }),
         'TeamUp-Request-Mode': config.requestMode
       }
     });
@@ -1240,7 +1249,7 @@ app.get('/api/memberships', async (req, res) => {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
         'Authorization': `Token ${config.accessToken}`,
-        ...(config.providerId && { 'TeamUp-Provider-ID': config.providerId }),
+        ...(config.providerId && { 'TeamUp-Provider-ID': String(config.providerId) }),
         'TeamUp-Request-Mode': config.requestMode
       }
     });
