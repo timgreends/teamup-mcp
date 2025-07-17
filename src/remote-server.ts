@@ -51,13 +51,15 @@ const sessions = new Map<string, UserSession>();
 console.log('=== Environment Debug ===');
 console.log('NODE_ENV:', process.env.NODE_ENV);
 console.log('PORT:', process.env.PORT);
+console.log('RAILWAY_ENVIRONMENT:', process.env.RAILWAY_ENVIRONMENT);
 console.log('TEAMUP_AUTH_MODE:', process.env.TEAMUP_AUTH_MODE);
 console.log('TEAMUP_ACCESS_TOKEN exists:', !!process.env.TEAMUP_ACCESS_TOKEN);
 console.log('TEAMUP_ACCESS_TOKEN length:', process.env.TEAMUP_ACCESS_TOKEN?.length);
 console.log('TEAMUP_PROVIDER_ID:', process.env.TEAMUP_PROVIDER_ID);
 console.log('All TEAMUP env vars:', Object.keys(process.env).filter(k => k.startsWith('TEAMUP')));
+console.log('All RAILWAY env vars:', Object.keys(process.env).filter(k => k.includes('RAILWAY')));
 console.log('Total env vars count:', Object.keys(process.env).length);
-console.log('Sample env vars:', Object.keys(process.env).slice(0, 10));
+console.log('All env var keys:', Object.keys(process.env).sort());
 console.log('========================');
 
 // Environment configuration
@@ -85,6 +87,11 @@ if (config.authMode === 'OAUTH') {
   if (!config.accessToken) {
     console.warn('Warning: TEAMUP_ACCESS_TOKEN not set. Users will need to provide their own tokens.');
     console.warn('To use a server-wide token, set TEAMUP_ACCESS_TOKEN in environment variables.');
+    console.warn('');
+    console.warn('If you have set these in Railway, please check:');
+    console.warn('1. Variables are in the "Variables" tab (not "Shared Variables")');
+    console.warn('2. The service has been redeployed after adding variables');
+    console.warn('3. Variable names exactly match (case-sensitive)');
   }
 }
 
