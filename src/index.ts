@@ -96,15 +96,44 @@ class TeamUpOAuthMCPServer {
         else if (this.tokens?.accessToken) {
           config.headers.Authorization = `Token ${this.tokens.accessToken}`;
         }
+        
+        // Debug logging
+        console.error('API Request:', {
+          method: config.method?.toUpperCase(),
+          url: config.url,
+          baseURL: config.baseURL,
+          headers: {
+            ...config.headers,
+            Authorization: config.headers.Authorization ? '[REDACTED]' : undefined
+          }
+        });
+        
         return config;
       },
       (error) => Promise.reject(error)
     );
 
     this.axios.interceptors.response.use(
-      (response) => response,
+      (response) => {
+        console.error('API Response:', {
+          status: response.status,
+          url: response.config.url,
+          method: response.config.method?.toUpperCase()
+        });
+        return response;
+      },
       async (error) => {
         const originalRequest = error.config;
+        
+        // Log error details
+        console.error('API Error:', {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          url: originalRequest?.url,
+          method: originalRequest?.method?.toUpperCase(),
+          data: error.response?.data,
+          headers: error.response?.headers
+        });
         
         if (error.response?.status === 401 && !originalRequest._retry && this.tokens?.refreshToken) {
           originalRequest._retry = true;

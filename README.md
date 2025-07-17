@@ -83,6 +83,18 @@ Once connected, you can ask Claude to:
 | TEAMUP_ACCESS_TOKEN | Yes | Your TeamUp API access token |
 | TEAMUP_PROVIDER_ID | Yes | Your TeamUp Provider ID |
 | TEAMUP_REQUEST_MODE | No | Request mode: `customer` (default) or `provider` |
+| TEAMUP_BASE_URL | No | API base URL (default: `https://goteamup.com/api/v2`) |
+
+### Important: Custom Subdomains
+
+If your TeamUp account uses a custom subdomain (e.g., `https://yourbusiness.goteamup.com`), you must set the base URL:
+
+```json
+"env": {
+  "TEAMUP_BASE_URL": "https://yourbusiness.goteamup.com/api/v2",
+  // ... other settings
+}
+```
 
 ### OAuth Mode (Advanced)
 
@@ -132,6 +144,17 @@ teamup-mcp-server/
 ### "TEAMUP_ACCESS_TOKEN is required" error
 - Check that your token is correctly set in the Claude Desktop config
 - Ensure there are no typos or extra spaces
+
+### "mode_not_allowed" or 403 errors
+- Verify your access token is valid and active
+- Check if you're using a custom subdomain and set `TEAMUP_BASE_URL` accordingly
+- Ensure `TEAMUP_REQUEST_MODE` is set to `provider` for full access
+- Confirm your Provider ID is correct
+
+### Authentication issues
+- The server now logs detailed request/response information to help debug
+- Check Claude Desktop's logs for API request details
+- Verify the Authorization header shows `Token [your-token]` format
 
 ### Server doesn't appear in Claude
 - Make sure Claude Desktop is completely quit and restarted
