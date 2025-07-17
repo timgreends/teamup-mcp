@@ -53,15 +53,22 @@ async function handleToolCall(toolName: string, args: any, config: TeamUpConfig)
     throw new Error('No authentication token available. Server needs TEAMUP_ACCESS_TOKEN environment variable.');
   }
 
+  const headers = {
+    'Accept': 'application/json',
+    'Content-Type': 'application/json',
+    'Authorization': `Token ${config.accessToken}`,
+    ...(config.providerId && { 'TeamUp-Provider-ID': config.providerId }),
+    'TeamUp-Request-Mode': config.requestMode
+  };
+  
+  console.log(`[TeamUp API] Making ${toolName} request with headers:`, {
+    ...headers,
+    'Authorization': `Token ${config.accessToken ? '[REDACTED]' : 'missing'}`
+  });
+  
   const axiosInstance = axios.create({
     baseURL: config.baseUrl,
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-      'Authorization': `Token ${config.accessToken}`,
-      ...(config.providerId && { 'TeamUp-Provider-ID': config.providerId }),
-      'TeamUp-Request-Mode': config.requestMode
-    }
+    headers
   });
 
   switch (toolName) {
@@ -107,8 +114,12 @@ async function handleToolCall(toolName: string, args: any, config: TeamUpConfig)
       if (!args.event_id) throw new Error('event_id is required');
       if (!args.customer_id) throw new Error('customer_id is required');
       const registerResponse = await axiosInstance.post(
-        `/events/${args.event_id}/registrations`,
-        { customer_id: args.customer_id }
+        `/events/${args.event_id}/register`,
+        { 
+          customer: args.customer_id,
+          customer_membership: args.customer_membership_id,
+          event: args.event_id
+        }
       );
       return registerResponse.data;
 
@@ -144,8 +155,17 @@ const config: TeamUpConfig = {
   accessToken: process.env.TEAMUP_ACCESS_TOKEN,
   providerId: process.env.TEAMUP_PROVIDER_ID,
   baseUrl: 'https://goteamup.com/api/v2',
-  requestMode: (process.env.TEAMUP_REQUEST_MODE as 'customer' | 'provider') || 'customer',
+  requestMode: (process.env.TEAMUP_REQUEST_MODE as 'customer' | 'provider') || 'provider', // Default to provider mode
 };
+
+// Log the configuration (without sensitive data)
+console.log('=== TeamUp Configuration ===');
+console.log('Auth Mode:', config.authMode);
+console.log('Request Mode:', config.requestMode);
+console.log('Provider ID exists:', !!config.providerId);
+console.log('Access Token exists:', !!config.accessToken);
+console.log('Base URL:', config.baseUrl);
+console.log('===========================');
 
 // Validate configuration based on auth mode
 if (config.authMode === 'OAUTH') {
@@ -438,95 +458,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// MCP protocol endpoint for ChatGPT
-app.all('/.well-known/mcp.json', async (req, res) => {
-  // Handle MCP JSON-RPC requests from ChatGPT
-  if (req.method === 'POST' && req.body?.jsonrpc === '2.0') {
-    console.log('ChatGPT MCP request:', JSON.stringify(req.body, null, 2));
-    
-    const { method, id, params } = req.body;
-    
-    switch (method) {
-      case 'initialize':
-        res.json({
-          jsonrpc: '2.0',
-          id,
-          result: {
-            protocolVersion: '2025-06-18',
-            capabilities: {
-              tools: {}
-            },
-            serverInfo: {
-              name: 'teamup-mcp-server',
-              version: '1.0.0'
-            }
-          }
-        });
-        break;
-        
-      case 'tools/list':
-        res.json({
-          jsonrpc: '2.0',
-          id,
-          result: {
-            tools: getAuthenticatedTools()
-          }
-        });
-        break;
-        
-      case 'tools/call':
-        // Handle tool calls
-        const toolName = params?.name;
-        const toolArgs = params?.arguments || {};
-        
-        try {
-          const result = await handleToolCall(toolName, toolArgs, config);
-          res.json({
-            jsonrpc: '2.0',
-            id,
-            result: {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify(result, null, 2)
-                }
-              ]
-            }
-          });
-        } catch (error: any) {
-          res.json({
-            jsonrpc: '2.0',
-            id,
-            error: {
-              code: -32603,
-              message: error.message
-            }
-          });
-        }
-        break;
-        
-      default:
-        res.json({
-          jsonrpc: '2.0',
-          id,
-          error: {
-            code: -32601,
-            message: `Method not found: ${method}`
-          }
-        });
-    }
-  } else {
-    // For GET requests, return MCP server info
-    res.json({
-      mcp_version: '2025-06-18',
-      server_name: 'teamup-mcp-server',
-      description: 'MCP server for TeamUp integration'
-    });
-  }
-});
-
-// OpenAPI specification endpoint (separate from MCP)
-app.get('/openapi.json', (req, res) => {
+// OpenAPI specification for ChatGPT Actions
+app.get(['/.well-known/mcp.json', '/openapi.json'], (req, res) => {
   const baseUrl = `${req.protocol}://${req.get('host')}`;
   res.json({
     "openapi": "3.1.0",
@@ -611,6 +544,7 @@ app.get('/openapi.json', (req, res) => {
     }
   });
 });
+
 
 // OpenAI MCP tools endpoint
 app.get('/mcp/tools', (req, res) => {
@@ -836,7 +770,26 @@ This will:
         };
       }
       
-      // Handle authenticated tools
+      // Handle authenticated tools using the shared handleToolCall function
+      try {
+        // For TOKEN mode, pass the session's token if available
+        const effectiveConfig = { ...config };
+        if (config.authMode === 'TOKEN' && session.userProvidedToken) {
+          effectiveConfig.accessToken = session.userProvidedToken;
+        } else if (config.authMode === 'OAUTH' && session.tokens?.accessToken) {
+          effectiveConfig.accessToken = session.tokens.accessToken;
+        }
+        
+        const result = await handleToolCall(name, args, effectiveConfig);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+        };
+      } catch (error: any) {
+        // If it's not a supported tool in handleToolCall, continue with the old implementation
+        console.log(`Tool ${name} not found in handleToolCall, using legacy handler`);
+      }
+      
+      // Legacy handlers for tools not in handleToolCall
       switch (name) {
         case 'list_events':
           const eventsRes = await axiosInstance.get('/events', { params: buildQueryParams(args as any) });
