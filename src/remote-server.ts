@@ -1184,6 +1184,50 @@ app.get('/api/events', async (req, res) => {
       baseURL: config.baseUrl,
       headers
     });
+    
+    // Add request interceptor to log full request details
+    axiosInstance.interceptors.request.use(
+      (config) => {
+        console.log('[TeamUp API Request]', {
+          method: config.method?.toUpperCase(),
+          url: `${config.baseURL}${config.url}`,
+          headers: {
+            ...config.headers,
+            'Authorization': config.headers['Authorization'] ? 'Token [REDACTED]' : 'missing'
+          },
+          params: config.params,
+          data: config.data
+        });
+        return config;
+      },
+      (error) => {
+        console.error('[TeamUp API Request Error]', error);
+        return Promise.reject(error);
+      }
+    );
+    
+    // Add response interceptor to log responses
+    axiosInstance.interceptors.response.use(
+      (response) => {
+        console.log('[TeamUp API Response]', {
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers,
+          data: response.data
+        });
+        return response;
+      },
+      (error) => {
+        console.error('[TeamUp API Error Response]', {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          headers: error.response?.headers,
+          data: error.response?.data,
+          message: error.message
+        });
+        return Promise.reject(error);
+      }
+    );
 
     const response = await axiosInstance.get('/events', {
       params: {
@@ -1264,6 +1308,33 @@ app.get('/api/memberships', async (req, res) => {
   }
 });
 
+// Debug endpoint to check configuration
+app.get('/debug/config', (req, res) => {
+  res.json({
+    config: {
+      authMode: config.authMode,
+      requestMode: config.requestMode,
+      providerId: config.providerId,
+      providerIdType: typeof config.providerId,
+      accessTokenExists: !!config.accessToken,
+      baseUrl: config.baseUrl
+    },
+    env: {
+      TEAMUP_REQUEST_MODE: process.env.TEAMUP_REQUEST_MODE,
+      TEAMUP_PROVIDER_ID: process.env.TEAMUP_PROVIDER_ID,
+      TEAMUP_AUTH_MODE: process.env.TEAMUP_AUTH_MODE,
+      NODE_ENV: process.env.NODE_ENV
+    },
+    testHeaders: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      'Authorization': config.accessToken ? 'Token [REDACTED]' : 'missing',
+      'TeamUp-Provider-ID': config.providerId ? String(config.providerId) : 'missing',
+      'TeamUp-Request-Mode': config.requestMode || 'missing'
+    }
+  });
+});
+
 // Catch-all route to debug what ChatGPT is looking for
 app.get('*', (req, res) => {
   console.log(`[404] Unknown route requested: ${req.method} ${req.path}`);
@@ -1274,7 +1345,8 @@ app.get('*', (req, res) => {
       '/.well-known/mcp.json',
       '/mcp/tools',
       '/mcp/messages',
-      '/mcp/sse'
+      '/mcp/sse',
+      '/debug/config'
     ]
   });
 });
