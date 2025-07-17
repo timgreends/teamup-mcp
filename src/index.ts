@@ -90,11 +90,11 @@ class TeamUpOAuthMCPServer {
       async (config) => {
         // In TOKEN mode, use the configured access token
         if (this.config.authMode === 'TOKEN' && this.config.accessToken) {
-          config.headers.Authorization = `Bearer ${this.config.accessToken}`;
+          config.headers.Authorization = `Token ${this.config.accessToken}`;
         }
         // In OAUTH mode, use OAuth tokens
         else if (this.tokens?.accessToken) {
-          config.headers.Authorization = `Bearer ${this.tokens.accessToken}`;
+          config.headers.Authorization = `Token ${this.tokens.accessToken}`;
         }
         return config;
       },
@@ -617,6 +617,9 @@ This will:
     
     if (this.config.authMode === 'TOKEN') {
       console.error('Using configured access token');
+      console.error(`Request mode: ${this.config.requestMode}`);
+      console.error(`Provider ID: ${this.config.providerId || 'Not set'}`);
+      console.error('Authorization header format: Token [token]');
     } else {
       console.error(`OAuth callback URL: ${this.config.oauth.redirectUri}`);
       if (this.authState === 'authenticated') {

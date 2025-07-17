@@ -361,12 +361,12 @@ app.post('/mcp/sse', async (req, res) => {
       if (config.authMode === 'TOKEN') {
         const token = session.userProvidedToken || config.accessToken;
         if (token) {
-          reqConfig.headers.Authorization = `Bearer ${token}`;
+          reqConfig.headers.Authorization = `Token ${token}`;
         }
       } 
       // In OAUTH mode, use OAuth tokens
       else if (session.tokens?.accessToken) {
-        reqConfig.headers.Authorization = `Bearer ${session.tokens.accessToken}`;
+        reqConfig.headers.Authorization = `Token ${session.tokens.accessToken}`;
       }
       return reqConfig;
     },
