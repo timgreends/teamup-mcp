@@ -49,11 +49,15 @@ const sessions = new Map<string, UserSession>();
 
 // Debug environment variables
 console.log('=== Environment Debug ===');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('PORT:', process.env.PORT);
 console.log('TEAMUP_AUTH_MODE:', process.env.TEAMUP_AUTH_MODE);
 console.log('TEAMUP_ACCESS_TOKEN exists:', !!process.env.TEAMUP_ACCESS_TOKEN);
 console.log('TEAMUP_ACCESS_TOKEN length:', process.env.TEAMUP_ACCESS_TOKEN?.length);
 console.log('TEAMUP_PROVIDER_ID:', process.env.TEAMUP_PROVIDER_ID);
-console.log('All env vars:', Object.keys(process.env).filter(k => k.startsWith('TEAMUP')));
+console.log('All TEAMUP env vars:', Object.keys(process.env).filter(k => k.startsWith('TEAMUP')));
+console.log('Total env vars count:', Object.keys(process.env).length);
+console.log('Sample env vars:', Object.keys(process.env).slice(0, 10));
 console.log('========================');
 
 // Environment configuration
@@ -357,8 +361,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// OpenAPI specification for ChatGPT Actions
-app.get('/openapi.json', (req, res) => {
+// OpenAPI specification for ChatGPT Actions (both routes for compatibility)
+app.get(['/.well-known/mcp.json', '/openapi.json'], (req, res) => {
   const baseUrl = `${req.protocol}://${req.get('host')}`;
   res.json({
     "openapi": "3.1.0",
