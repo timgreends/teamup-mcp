@@ -292,6 +292,27 @@ class TeamUpOAuthMCPServer {
         }
       } catch (error: any) {
         const apiError = handleAPIError(error);
+        
+        // Special handling for mode_not_allowed errors
+        if (apiError.code === 'mode_not_allowed') {
+          console.error('\n=== AUTHENTICATION ERROR ===');
+          console.error('Mode not allowed - Provider access denied');
+          console.error('Current configuration:');
+          console.error(`- Token: ${this.config.accessToken ? '[SET]' : '[NOT SET]'}`);
+          console.error(`- Provider ID: ${this.config.providerId || '[NOT SET]'}`);
+          console.error(`- Request Mode: ${this.config.requestMode}`);
+          console.error('\nTo test your token directly, run:');
+          console.error(`curl -H "Authorization: Token YOUR_TOKEN" -H "TeamUp-Provider-ID: ${this.config.providerId}" -H "TeamUp-Request-Mode: provider" https://goteamup.com/api/v2/events`);
+          console.error('===========================\n');
+          
+          return {
+            content: [{
+              type: 'text',
+              text: `Error: ${apiError.message}\n\n**Provider Mode Access Denied**\n\nThis error means your token doesn't have provider permissions. Please:\n1. Create a new token with provider/admin permissions in TeamUp\n2. Update your Claude Desktop configuration\n3. Restart Claude Desktop\n\nCode: ${apiError.code}\nStatus: ${apiError.statusCode}`
+            }]
+          };
+        }
+        
         return {
           content: [{
             type: 'text',

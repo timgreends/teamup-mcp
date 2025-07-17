@@ -350,6 +350,56 @@ app.get('/callback', async (req, res) => {
   }
 });
 
+// OpenAI MCP endpoint
+app.get('/.well-known/mcp.json', (req, res) => {
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  res.json({
+    "mcp": {
+      "version": "0.1.0",
+      "name": "TeamUp MCP Server",
+      "description": "Connect ChatGPT to TeamUp for managing events, customers, and memberships",
+      "server_url": `${baseUrl}/mcp`,
+      "capabilities": {
+        "tools": true,
+        "resources": false,
+        "prompts": false
+      }
+    }
+  });
+});
+
+// OpenAI MCP tools endpoint
+app.get('/mcp/tools', (req, res) => {
+  // For testing, return tools without auth requirement
+  res.json({
+    tools: getAuthenticatedTools()
+  });
+});
+
+// OpenAI MCP SSE endpoint
+app.get('/mcp/messages', async (req, res) => {
+  // Set SSE headers
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*'
+  });
+
+  // Create a test session without auth
+  const sessionId = crypto.randomBytes(32).toString('hex');
+  const session: UserSession = {
+    id: sessionId,
+    authState: 'authenticated', // Skip auth for testing
+    userProvidedToken: config.accessToken, // Use server token for testing
+    createdAt: new Date(),
+    lastAccess: new Date()
+  };
+  sessions.set(sessionId, session);
+
+  // Handle the OpenAI MCP connection
+  await handleOpenAIMCP(req, res, session);
+});
 
 // Claude MCP SSE endpoint (existing)
 app.post('/mcp/sse', async (req, res) => {
@@ -631,8 +681,6 @@ This will:
   });
 });
 
-// Removed OpenAI handler - ChatGPT MCP format is not yet standardized
-/*
 async function handleOpenAIMCP(req: any, res: any, session: UserSession) {
   // Create axios instance for this session
   const axiosInstance = axios.create({
@@ -791,7 +839,6 @@ async function handleOpenAIMCP(req: any, res: any, session: UserSession) {
     sessions.delete(session.id);
   });
 }
-*/
 
 function getAuthenticatedTools(): Tool[] {
   return [
