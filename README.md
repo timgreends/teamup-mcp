@@ -1,6 +1,6 @@
 # TeamUp MCP Server
 
-Connect Claude Desktop to TeamUp for managing events, customers, and memberships directly from your AI assistant.
+Connect Claude Desktop and ChatGPT to TeamUp for managing events, customers, and memberships directly from your AI assistant.
 
 ## Features
 
@@ -110,6 +110,15 @@ If you prefer OAuth authentication:
    - `TEAMUP_CLIENT_SECRET`
    - `TEAMUP_REDIRECT_URI`
 
+## ChatGPT Support (Remote Server)
+
+The TeamUp MCP server can also be deployed as a remote server for use with ChatGPT:
+
+1. Deploy to a hosting service (Railway, Render, etc.)
+2. Set environment variables for authentication
+3. Add to ChatGPT via Settings → Actions
+4. Import from: `https://your-domain.com/.well-known/mcp.json`
+
 ## Development
 
 ### Running Locally
@@ -123,6 +132,9 @@ npm run build
 
 # Run production build
 npm start
+
+# Run remote server (for ChatGPT)
+npm run start:remote
 ```
 
 ### Project Structure
