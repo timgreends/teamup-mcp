@@ -1,203 +1,177 @@
-# TeamUp MCP OAuth Server
+# TeamUp MCP Server
 
-A secure OAuth-only MCP server for TeamUp integration with AI assistants.
+A Model Context Protocol (MCP) server for TeamUp integration, available as both a hosted remote server and local installation.
 
 ## Features
 
-- 🔐 OAuth 2.0 authentication only (no API keys)
-- 🚀 One-click setup for users
+- 🔐 OAuth 2.0 authentication
+- 🌐 Remote hosted server (no local installation needed)
+- 🚀 Easy setup for end users
 - 🔄 Automatic token refresh
-- 📱 Works with Claude Desktop and other MCP-compatible AI assistants
+- 📱 Works with Claude Desktop
 
-## Architecture
+## For End Users
 
-This project has two components:
-1. **Auth Server** (deployed to Railway/Render) - Handles OAuth redirects
-2. **MCP Server** (runs locally in Claude Desktop) - Connects to TeamUp API
+### Quick Setup (Remote Server)
 
-## Setup Instructions
+If you're using a hosted TeamUp MCP server, setup is simple:
 
-### Step 1: Deploy Auth Server (Optional but Recommended)
-
-The auth server provides a smoother OAuth flow. Deploy it to Railway:
-
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template)
-
-Once deployed, note your public URL (e.g., `https://your-app.railway.app`)
-
-### Step 2: Get TeamUp Credentials
-
-1. Log in to TeamUp
-2. Go to Settings → Integrations → Customer API
-3. Create a new application:
-   - Name: Your App Name
-   - Redirect URI: `http://localhost:8080/callback`
-   - Scopes: read_write
-4. Copy Client ID, Client Secret, and Provider ID
-
-### Step 3: Install MCP Server Locally
-
-```bash
-# Clone the repo
-git clone https://github.com/timgreends/teamup-mcp.git
-cd teamup-mcp-server
-
-# Install dependencies
-npm install
-
-# Build the server
-npm run build
-```
-
-### Step 4: Configure Claude Desktop
-
-1. Find your Claude Desktop configuration file:
-   - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-   - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-   - Linux: `~/.config/claude/claude_desktop_config.json`
-
-2. Add the TeamUp server configuration:
+1. **Get the server URL** from your provider
+2. **Configure Claude Desktop** by adding to your config file:
 
 ```json
 {
   "mcpServers": {
     "teamup": {
-      "command": "node",
-      "args": ["/absolute/path/to/teamup-mcp-server/dist/index.js"],
-      "env": {
-        "TEAMUP_CLIENT_ID": "your-client-id",
-        "TEAMUP_CLIENT_SECRET": "your-client-secret",
-        "TEAMUP_REDIRECT_URI": "http://localhost:8080/callback",
-        "TEAMUP_PROVIDER_ID": "your-provider-id",
-        "TEAMUP_AUTO_AUTH_URL": "https://your-railway-app.railway.app/auth/teamup"
-      }
+      "url": "https://your-teamup-mcp-server.com/mcp/sse"
     }
   }
 }
 ```
 
-**Important**: 
-- Replace `/absolute/path/to/teamup-mcp-server` with the actual path where you cloned the repository
-- If you deployed the auth server, set `TEAMUP_AUTO_AUTH_URL` to your Railway app URL + `/auth/teamup`
-- If you didn't deploy the auth server, omit the `TEAMUP_AUTO_AUTH_URL` line
+3. **Restart Claude Desktop**
+4. **Type "Initialize TeamUp"** in Claude to connect your account
 
-### Step 5: Restart Claude Desktop
+That's it! No local installation or OAuth credentials needed.
 
-1. Quit Claude Desktop completely
-2. Start Claude Desktop again
-3. The TeamUp server should now be available
+### Finding Your Config File
 
-## Usage
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+- Linux: `~/.config/claude/claude_desktop_config.json`
 
-1. In Claude, type: "Initialize TeamUp"
-2. Click the authentication link provided
-3. Log in to TeamUp and authorize the app
-4. Return to Claude - you're now connected!
+## For Developers
 
-Example commands:
-- "List today's events"
-- "Show me customer John Doe"
-- "Create a new customer"
-- "List available memberships"
+### Architecture
 
-## Environment Variables
+This project includes three server modes:
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| TEAMUP_CLIENT_ID | Yes | Your TeamUp OAuth Client ID |
-| TEAMUP_CLIENT_SECRET | Yes | Your TeamUp OAuth Client Secret |
-| TEAMUP_REDIRECT_URI | Yes | OAuth callback URL (default: http://localhost:8080/callback) |
-| TEAMUP_PROVIDER_ID | Yes | Your TeamUp Provider ID |
-| TEAMUP_REQUEST_MODE | No | 'customer' or 'provider' (default: customer) |
-| TEAMUP_CALLBACK_PORT | No | Port for OAuth callback (default: 8080) |
-| TEAMUP_AUTO_AUTH_URL | No | Your deployed auth server URL + `/auth/teamup` |
+1. **Remote Server** (`remote-server.ts`) - Hosted MCP server with SSE transport
+2. **Local Server** (`index.ts`) - Traditional stdio-based MCP server
+3. **Auth Server** (`auth-server.ts`) - OAuth redirect handler
 
-## Troubleshooting
+### Deploy Your Own Remote Server
 
-### "Cannot find module" error
-- Make sure you've run `npm install` and `npm run build`
-- Verify the path in your Claude Desktop config is correct
-- Use absolute paths, not relative paths
+#### Prerequisites
 
-### "TEAMUP_CLIENT_ID and TEAMUP_CLIENT_SECRET are required" error
-- Check that your environment variables are set correctly in Claude Desktop config
-- Make sure there are no typos in the variable names
+- Node.js 20+
+- TeamUp OAuth credentials
+- Hosting platform (Railway, Render, etc.)
 
-### Authentication fails
-- Verify your redirect URI matches exactly what's configured in TeamUp
-- Check that your Client ID and Secret are correct
-- Ensure your Provider ID is included
+#### Environment Variables
 
-### Server disconnects immediately
-- Check the MCP logs in Claude Desktop for specific errors
-- Verify all required environment variables are set
-- Make sure the path to `index.js` is correct
+```env
+# Required
+TEAMUP_CLIENT_ID=your-client-id
+TEAMUP_CLIENT_SECRET=your-client-secret
+TEAMUP_PROVIDER_ID=your-provider-id
 
-## Development
+# Optional
+TEAMUP_REDIRECT_URI=https://your-domain.com/callback
+TEAMUP_REQUEST_MODE=customer
+TEAMUP_BASE_URL=https://goteamup.com/api/v2
+```
 
-### Local Development Setup
+#### Deploy to Railway
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template)
+
+1. Click the button above
+2. Add your environment variables
+3. Deploy!
+
+#### Deploy to Render
+
+1. Fork this repository
+2. Create a new Web Service on Render
+3. Connect your GitHub repository
+4. Add environment variables
+5. Deploy
+
+### Local Development
 
 ```bash
-# Clone the repo
+# Clone the repository
 git clone https://github.com/timgreends/teamup-mcp.git
 cd teamup-mcp-server
 
 # Install dependencies
 npm install
 
-# Copy env example
-cp .env.example .env
+# Build TypeScript
+npm run build
 
-# Edit .env with your credentials
+# Run remote server locally
+npm run dev:remote
 
-# Run the MCP server locally
+# Run local MCP server
 npm run dev
 
-# Run the auth server locally (in another terminal)
+# Run auth redirect server
 npm run dev:auth
 ```
 
-### Building
+### API Endpoints (Remote Server)
 
-```bash
-# Build TypeScript to JavaScript
-npm run build
+- `GET /` - Landing page with setup instructions
+- `POST /mcp/sse` - MCP SSE endpoint for Claude Desktop
+- `GET /callback` - OAuth callback handler
 
-# Run tests (if available)
-npm test
-```
+### Security Considerations
 
-## Deployment Options
+- Sessions are isolated per user
+- OAuth tokens are stored in memory (use Redis/DB for production)
+- Automatic session cleanup after 1 hour of inactivity
+- CORS enabled for Claude Desktop compatibility
 
-### Railway (Recommended for Auth Server)
-- Auto-deploys from GitHub
-- Built-in environment variable management
-- Free tier available
-- Automatic HTTPS
+## Usage Examples
 
-### Render
-- Simple deployment
-- Auto-SSL
-- Good for production
+Once connected, you can use these commands in Claude:
 
-### Local with ngrok (Development)
-- For development/testing
-- `ngrok http 8080`
-- Update redirect URI in TeamUp settings
+- "List today's events"
+- "Show me customer John Doe"
+- "Create a new customer named Jane Smith with email jane@example.com"
+- "List available memberships"
+- "Get details for event ID 123"
+- "Register customer 456 for event 789"
 
-## Security
+## Troubleshooting
 
-- Client Secret is never exposed to users
-- Tokens are stored in memory only
-- Automatic token refresh
-- OAuth 2.0 standard compliance
+### Remote Server Issues
 
-## Support
+1. **"Cannot connect to MCP server"**
+   - Verify the server URL is correct
+   - Check if the server is running
+   - Ensure Claude Desktop is fully restarted
 
-- Issues: [GitHub Issues](https://github.com/timgreends/teamup-mcp)
-- TeamUp API Docs: https://goteamup.com/api/v2/docs
-- MCP Protocol: https://modelcontextprotocol.com
+2. **"Authentication failed"**
+   - Check TeamUp OAuth credentials on server
+   - Verify redirect URI matches TeamUp settings
+   - Try clearing browser cookies and re-authenticating
+
+### Local Server Issues
+
+1. **"Cannot find module"**
+   - Run `npm install` and `npm run build`
+   - Use absolute paths in Claude config
+
+2. **"TEAMUP_CLIENT_ID required"**
+   - Set all required environment variables
+   - Check for typos in variable names
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
 
 ## License
 
 MIT
+
+## Support
+
+- Issues: [GitHub Issues](https://github.com/timgreends/teamup-mcp)
+- TeamUp API: https://goteamup.com/api/v2/docs
+- MCP Protocol: https://modelcontextprotocol.io
