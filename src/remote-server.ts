@@ -27,7 +27,9 @@ interface OAuthTokens {
 }
 
 interface TeamUpConfig {
+  authMode: 'TOKEN' | 'OAUTH';
   oauth: OAuthConfig;
+  accessToken?: string;
   providerId?: string;
   baseUrl: string;
   requestMode: 'customer' | 'provider';
@@ -36,6 +38,7 @@ interface TeamUpConfig {
 interface UserSession {
   id: string;
   tokens?: OAuthTokens;
+  userProvidedToken?: string;
   authState: 'uninitialized' | 'waiting_for_auth' | 'authenticated';
   createdAt: Date;
   lastAccess: Date;
@@ -46,20 +49,30 @@ const sessions = new Map<string, UserSession>();
 
 // Environment configuration
 const config: TeamUpConfig = {
+  authMode: (process.env.TEAMUP_AUTH_MODE as 'TOKEN' | 'OAUTH') || 'TOKEN',
   oauth: {
-    clientId: process.env.TEAMUP_CLIENT_ID!,
-    clientSecret: process.env.TEAMUP_CLIENT_SECRET!,
+    clientId: process.env.TEAMUP_CLIENT_ID || '',
+    clientSecret: process.env.TEAMUP_CLIENT_SECRET || '',
     redirectUri: process.env.TEAMUP_REDIRECT_URI || 'https://your-domain.com/callback',
     scope: process.env.TEAMUP_OAUTH_SCOPE || 'read_write'
   },
+  accessToken: process.env.TEAMUP_ACCESS_TOKEN,
   providerId: process.env.TEAMUP_PROVIDER_ID,
   baseUrl: process.env.TEAMUP_BASE_URL || 'https://goteamup.com/api/v2',
   requestMode: (process.env.TEAMUP_REQUEST_MODE as 'customer' | 'provider') || 'customer',
 };
 
-if (!config.oauth.clientId || !config.oauth.clientSecret) {
-  console.error('Error: TEAMUP_CLIENT_ID and TEAMUP_CLIENT_SECRET are required');
-  process.exit(1);
+// Validate configuration based on auth mode
+if (config.authMode === 'OAUTH') {
+  if (!config.oauth.clientId || !config.oauth.clientSecret) {
+    console.error('Error: TEAMUP_CLIENT_ID and TEAMUP_CLIENT_SECRET are required for OAUTH mode');
+    process.exit(1);
+  }
+} else if (config.authMode === 'TOKEN') {
+  if (!config.accessToken) {
+    console.error('Error: TEAMUP_ACCESS_TOKEN is required for TOKEN mode');
+    process.exit(1);
+  }
 }
 
 // Express app setup
@@ -114,6 +127,42 @@ setInterval(() => {
 
 // Landing page
 app.get('/', (req, res) => {
+  const serverUrl = process.env.RAILWAY_PUBLIC_DOMAIN 
+    ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` 
+    : `http://${req.get('host')}`;
+    
+  const configExample = config.authMode === 'TOKEN' 
+    ? `{
+  "mcpServers": {
+    "teamup": {
+      "url": "${serverUrl}/mcp/sse"
+    }
+  }
+}`
+    : `{
+  "mcpServers": {
+    "teamup": {
+      "url": "${serverUrl}/mcp/sse"
+    }
+  }
+}`;
+
+  const authInstructions = config.authMode === 'TOKEN'
+    ? `<h3>🔑 Authentication Mode: Token</h3>
+        <p>This server uses direct API tokens. When you connect:</p>
+        <ol>
+          <li>You'll be prompted to enter your TeamUp access token</li>
+          <li>Get your token from TeamUp Settings → API → Access Tokens</li>
+          <li>The token will be used for all API requests</li>
+        </ol>`
+    : `<h3>🔐 Authentication Mode: OAuth</h3>
+        <p>This server uses OAuth authentication. When you connect:</p>
+        <ol>
+          <li>Use the "Initialize TeamUp" command</li>
+          <li>Click the authentication link</li>
+          <li>Log in to TeamUp and authorize</li>
+        </ol>`;
+
   res.send(`
     <!DOCTYPE html>
     <html>
@@ -145,12 +194,29 @@ app.get('/', (req, res) => {
           border-radius: 4px;
           margin: 20px 0;
         }
+        .auth-mode {
+          background: #f0f0f0;
+          padding: 20px;
+          border-radius: 4px;
+          margin: 20px 0;
+        }
         code {
           background: #272822;
           color: #f8f8f2;
           padding: 2px 6px;
           border-radius: 3px;
           font-family: 'Monaco', 'Menlo', monospace;
+        }
+        pre {
+          background: #272822;
+          color: #f8f8f2;
+          padding: 20px;
+          border-radius: 4px;
+          overflow-x: auto;
+        }
+        pre code {
+          background: none;
+          padding: 0;
         }
       </style>
     </head>
@@ -161,17 +227,16 @@ app.get('/', (req, res) => {
         <div class="status">
           <h3>✅ Server is running</h3>
           <p>This is a remote MCP server for TeamUp integration.</p>
+          <p><strong>Mode:</strong> ${config.authMode}</p>
+        </div>
+        
+        <div class="auth-mode">
+          ${authInstructions}
         </div>
         
         <h3>🔌 Connect from Claude Desktop</h3>
         <p>Add this to your Claude Desktop configuration:</p>
-        <pre><code>{
-  "mcpServers": {
-    "teamup": {
-      "url": "${process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : req.get('host')}/mcp/sse"
-    }
-  }
-}</code></pre>
+        <pre><code>${configExample}</code></pre>
         
         <p>Then restart Claude Desktop and use the TeamUp integration!</p>
       </div>
@@ -277,11 +342,19 @@ app.post('/mcp/sse', async (req, res) => {
   
   // Add auth interceptor
   axiosInstance.interceptors.request.use(
-    async (config) => {
-      if (session.tokens?.accessToken) {
-        config.headers.Authorization = `Bearer ${session.tokens.accessToken}`;
+    async (reqConfig) => {
+      // In TOKEN mode, use server token or user-provided token
+      if (config.authMode === 'TOKEN') {
+        const token = session.userProvidedToken || config.accessToken;
+        if (token) {
+          reqConfig.headers.Authorization = `Bearer ${token}`;
+        }
+      } 
+      // In OAUTH mode, use OAuth tokens
+      else if (session.tokens?.accessToken) {
+        reqConfig.headers.Authorization = `Bearer ${session.tokens.accessToken}`;
       }
-      return config;
+      return reqConfig;
     },
     (error) => Promise.reject(error)
   );
@@ -301,7 +374,34 @@ app.post('/mcp/sse', async (req, res) => {
   
   // Set up handlers
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    if (session.authState !== 'authenticated') {
+    // In TOKEN mode with server token, no initialization needed
+    if (config.authMode === 'TOKEN' && config.accessToken) {
+      session.authState = 'authenticated';
+      return { tools: getAuthenticatedTools() };
+    }
+    
+    // In TOKEN mode without server token, need user to provide token
+    if (config.authMode === 'TOKEN' && !session.userProvidedToken) {
+      return {
+        tools: [{
+          name: 'set_teamup_token',
+          description: 'Set your TeamUp access token for API access',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              token: {
+                type: 'string',
+                description: 'Your TeamUp access token (get from TeamUp Settings → API → Access Tokens)'
+              }
+            },
+            required: ['token']
+          }
+        }]
+      };
+    }
+    
+    // In OAUTH mode, show initialize tool if not authenticated
+    if (config.authMode === 'OAUTH' && session.authState !== 'authenticated') {
       return {
         tools: [{
           name: 'initialize_teamup',
@@ -321,7 +421,40 @@ app.post('/mcp/sse', async (req, res) => {
     const { name, arguments: args } = request.params;
     
     try {
+      // Handle token setting for TOKEN mode
+      if (name === 'set_teamup_token') {
+        const tokenArgs = args as any;
+        if (!tokenArgs.token) {
+          return {
+            content: [{
+              type: 'text',
+              text: 'Error: Token is required'
+            }]
+          };
+        }
+        
+        session.userProvidedToken = tokenArgs.token;
+        session.authState = 'authenticated';
+        
+        return {
+          content: [{
+            type: 'text',
+            text: '✅ **TeamUp Token Set Successfully!**\n\nYour access token has been configured. You can now use all TeamUp tools.'
+          }]
+        };
+      }
+      
+      // Handle OAuth initialization
       if (name === 'initialize_teamup') {
+        if (config.authMode !== 'OAUTH') {
+          return {
+            content: [{
+              type: 'text',
+              text: 'This server is configured for TOKEN authentication. Use the "set_teamup_token" tool instead.'
+            }]
+          };
+        }
+        
         if (session.authState === 'authenticated') {
           return {
             content: [{
@@ -365,10 +498,13 @@ This will:
       }
       
       if (session.authState !== 'authenticated') {
+        const authMessage = config.authMode === 'TOKEN' 
+          ? 'TeamUp is not authenticated. Please use the "set_teamup_token" tool first to provide your TeamUp access token.'
+          : 'TeamUp is not authenticated. Please use the "initialize_teamup" tool first to connect your TeamUp account.';
         return {
           content: [{
             type: 'text',
-            text: 'TeamUp is not authenticated. Please use the "initialize_teamup" tool first to connect your TeamUp account.'
+            text: authMessage
           }]
         };
       }
@@ -576,6 +712,14 @@ declare global {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`TeamUp MCP Remote Server running on port ${PORT}`);
+  console.log(`Authentication Mode: ${config.authMode}`);
+  
+  if (config.authMode === 'TOKEN') {
+    console.log(`Using ${config.accessToken ? 'server-configured' : 'user-provided'} access tokens`);
+  } else {
+    console.log(`OAuth configured with redirect URI: ${config.oauth.redirectUri}`);
+  }
+  
   if (process.env.RAILWAY_PUBLIC_DOMAIN) {
     console.log(`Public URL: https://${process.env.RAILWAY_PUBLIC_DOMAIN}`);
     console.log(`MCP Endpoint: https://${process.env.RAILWAY_PUBLIC_DOMAIN}/mcp/sse`);

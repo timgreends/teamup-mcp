@@ -4,10 +4,10 @@ A Model Context Protocol (MCP) server for TeamUp integration, available as both 
 
 ## Features
 
-- 🔐 OAuth 2.0 authentication
+- 🔐 Two authentication modes: Direct API Token or OAuth 2.0
 - 🌐 Remote hosted server (no local installation needed)
 - 🚀 Easy setup for end users
-- 🔄 Automatic token refresh
+- 🔄 Automatic token refresh (OAuth mode)
 - 📱 Works with Claude Desktop
 
 ## For End Users
@@ -55,22 +55,45 @@ This project includes three server modes:
 #### Prerequisites
 
 - Node.js 20+
-- TeamUp OAuth credentials
+- TeamUp credentials (Access Token or OAuth)
 - Hosting platform (Railway, Render, etc.)
 
 #### Environment Variables
 
 ```env
-# Required
-TEAMUP_CLIENT_ID=your-client-id
-TEAMUP_CLIENT_SECRET=your-client-secret
+# Authentication Mode (default: TOKEN)
+TEAMUP_AUTH_MODE=TOKEN  # or OAUTH
+
+# For TOKEN mode (simpler setup)
+TEAMUP_ACCESS_TOKEN=your-teamup-access-token
 TEAMUP_PROVIDER_ID=your-provider-id
 
-# Optional
+# For OAUTH mode (more complex, but supports refresh)
+TEAMUP_CLIENT_ID=your-client-id
+TEAMUP_CLIENT_SECRET=your-client-secret
 TEAMUP_REDIRECT_URI=https://your-domain.com/callback
+
+# Optional (both modes)
 TEAMUP_REQUEST_MODE=customer
 TEAMUP_BASE_URL=https://goteamup.com/api/v2
 ```
+
+#### Getting TeamUp Credentials
+
+**For TOKEN Mode (Recommended - Simpler)**
+1. Log in to TeamUp
+2. Go to Settings → API → Access Tokens
+3. Create a new access token
+4. Copy the token and Provider ID
+
+**For OAUTH Mode (Advanced - Supports token refresh)**
+1. Log in to TeamUp
+2. Go to Settings → Integrations → Customer API
+3. Create a new OAuth application:
+   - Name: Your App Name
+   - Redirect URI: `https://your-domain.com/callback`
+   - Scopes: read_write
+4. Copy Client ID, Client Secret, and Provider ID
 
 #### Deploy to Railway
 
