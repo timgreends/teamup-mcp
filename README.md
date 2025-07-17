@@ -16,7 +16,9 @@ Connect Claude Desktop and ChatGPT to TeamUp for managing events, customers, and
 
 1. Log in to your TeamUp account
 2. Go to Settings → API → Access Tokens
-3. Create a new access token
+3. Create a new access token with **provider/admin permissions**
+   - Ensure the token has the necessary permissions for provider mode
+   - Standard customer tokens will result in "mode_not_allowed" errors
 4. Note your Provider ID (in your account settings)
 
 ### 2. Install the Server
@@ -161,10 +163,12 @@ teamup-mcp-server/
 - Ensure there are no typos or extra spaces
 
 ### "mode_not_allowed" or 403 errors
+- **Most common cause**: Your access token doesn't have provider permissions
+  - In TeamUp, create a new access token with admin/provider permissions
+  - Customer-level tokens cannot access provider mode endpoints
 - Verify your access token is valid and active
 - Ensure `TEAMUP_REQUEST_MODE` is set to `provider` for full access
 - Confirm your Provider ID is correct
-- Check that your access token has provider-level permissions in TeamUp
 
 ### Authentication issues
 - The server now logs detailed request/response information to help debug
