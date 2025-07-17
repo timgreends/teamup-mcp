@@ -215,6 +215,11 @@ app.get('/', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`TeamUp Auth Redirect Service running on port ${PORT}`);
-  console.log(`Main URL: http://localhost:${PORT}`);
-  console.log(`Auth endpoint: http://localhost:${PORT}/auth/teamup`);
+  if (process.env.RAILWAY_PUBLIC_DOMAIN) {
+    console.log(`Main URL: https://${process.env.RAILWAY_PUBLIC_DOMAIN}`);
+    console.log(`Auth endpoint: https://${process.env.RAILWAY_PUBLIC_DOMAIN}/auth/teamup`);
+  } else {
+    console.log(`Main URL: http://localhost:${PORT}`);
+    console.log(`Auth endpoint: http://localhost:${PORT}/auth/teamup`);
+  }
 });
