@@ -459,7 +459,13 @@ app.use((req, res, next) => {
 });
 
 // OpenAPI specification for ChatGPT Actions
-app.get(['/.well-known/mcp.json', '/openapi.json'], (req, res) => {
+// Handle both GET and POST requests (ChatGPT sends both)
+app.all(['/.well-known/mcp.json', '/openapi.json'], (req, res) => {
+  // Log POST body if present for debugging
+  if (req.method === 'POST' && req.body) {
+    console.log('ChatGPT POST to OpenAPI endpoint:', JSON.stringify(req.body, null, 2));
+  }
+  
   const baseUrl = `${req.protocol}://${req.get('host')}`;
   res.json({
     "openapi": "3.1.0",
