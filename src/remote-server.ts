@@ -350,7 +350,14 @@ app.get('/callback', async (req, res) => {
   }
 });
 
-// OpenAI MCP endpoint
+// Log all requests to help debug ChatGPT
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  console.log('Headers:', req.headers);
+  next();
+});
+
+// OpenAI MCP endpoint - keep simple for now
 app.get('/.well-known/mcp.json', (req, res) => {
   const baseUrl = `${req.protocol}://${req.get('host')}`;
   res.json({
@@ -950,6 +957,21 @@ declare global {
     }
   }
 }
+
+// Catch-all route to debug what ChatGPT is looking for
+app.get('*', (req, res) => {
+  console.log(`[404] Unknown route requested: ${req.method} ${req.path}`);
+  res.status(404).json({
+    error: 'Not found',
+    message: `Unknown route: ${req.path}`,
+    availableEndpoints: [
+      '/.well-known/mcp.json',
+      '/mcp/tools',
+      '/mcp/messages',
+      '/mcp/sse'
+    ]
+  });
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
