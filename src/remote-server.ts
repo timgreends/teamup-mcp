@@ -47,6 +47,76 @@ interface UserSession {
 // In-memory session store (replace with Redis/Database in production)
 const sessions = new Map<string, UserSession>();
 
+// Handle MCP tool calls
+async function handleToolCall(toolName: string, args: any, config: TeamUpConfig): Promise<any> {
+  if (!config.accessToken) {
+    throw new Error('No authentication token available. Server needs TEAMUP_ACCESS_TOKEN environment variable.');
+  }
+
+  const axiosInstance = axios.create({
+    baseURL: config.baseUrl,
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      'Authorization': `Token ${config.accessToken}`,
+      ...(config.providerId && { 'TeamUp-Provider-ID': config.providerId }),
+      'TeamUp-Request-Mode': config.requestMode
+    }
+  });
+
+  switch (toolName) {
+    case 'list_events':
+      const eventsResponse = await axiosInstance.get('/events', {
+        params: args
+      });
+      return eventsResponse.data;
+
+    case 'get_event':
+      if (!args.event_id) throw new Error('event_id is required');
+      const eventResponse = await axiosInstance.get(`/events/${args.event_id}`);
+      return eventResponse.data;
+
+    case 'list_customers':
+      const customersResponse = await axiosInstance.get('/customers', {
+        params: args
+      });
+      return customersResponse.data;
+
+    case 'get_customer':
+      if (!args.customer_id) throw new Error('customer_id is required');
+      const customerResponse = await axiosInstance.get(`/customers/${args.customer_id}`);
+      return customerResponse.data;
+
+    case 'create_customer':
+      const createResponse = await axiosInstance.post('/customers', args);
+      return createResponse.data;
+
+    case 'update_customer':
+      if (!args.customer_id) throw new Error('customer_id is required');
+      const { customer_id, ...updateData } = args;
+      const updateResponse = await axiosInstance.put(`/customers/${customer_id}`, updateData);
+      return updateResponse.data;
+
+    case 'list_memberships':
+      const membershipsResponse = await axiosInstance.get('/memberships', {
+        params: args
+      });
+      return membershipsResponse.data;
+
+    case 'register_for_event':
+      if (!args.event_id) throw new Error('event_id is required');
+      if (!args.customer_id) throw new Error('customer_id is required');
+      const registerResponse = await axiosInstance.post(
+        `/events/${args.event_id}/registrations`,
+        { customer_id: args.customer_id }
+      );
+      return registerResponse.data;
+
+    default:
+      throw new Error(`Unknown tool: ${toolName}`);
+  }
+}
+
 // Debug environment variables
 console.log('=== Environment Debug ===');
 console.log('NODE_ENV:', process.env.NODE_ENV);
@@ -368,16 +438,96 @@ app.use((req, res, next) => {
   next();
 });
 
-// OpenAPI specification for ChatGPT Actions (both routes for compatibility)
-// ChatGPT sends both GET and POST requests to this endpoint
-app.all(['/.well-known/mcp.json', '/openapi.json'], (req, res) => {
-  const baseUrl = `${req.protocol}://${req.get('host')}`;
-  
-  // Log POST body if present (for debugging)
-  if (req.method === 'POST' && req.body) {
-    console.log('ChatGPT POST body:', JSON.stringify(req.body, null, 2));
+// MCP protocol endpoint for ChatGPT
+app.all('/.well-known/mcp.json', async (req, res) => {
+  // Handle MCP JSON-RPC requests from ChatGPT
+  if (req.method === 'POST' && req.body?.jsonrpc === '2.0') {
+    console.log('ChatGPT MCP request:', JSON.stringify(req.body, null, 2));
+    
+    const { method, id, params } = req.body;
+    
+    switch (method) {
+      case 'initialize':
+        res.json({
+          jsonrpc: '2.0',
+          id,
+          result: {
+            protocolVersion: '2025-06-18',
+            capabilities: {
+              tools: {}
+            },
+            serverInfo: {
+              name: 'teamup-mcp-server',
+              version: '1.0.0'
+            }
+          }
+        });
+        break;
+        
+      case 'tools/list':
+        res.json({
+          jsonrpc: '2.0',
+          id,
+          result: {
+            tools: getAuthenticatedTools()
+          }
+        });
+        break;
+        
+      case 'tools/call':
+        // Handle tool calls
+        const toolName = params?.name;
+        const toolArgs = params?.arguments || {};
+        
+        try {
+          const result = await handleToolCall(toolName, toolArgs, config);
+          res.json({
+            jsonrpc: '2.0',
+            id,
+            result: {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(result, null, 2)
+                }
+              ]
+            }
+          });
+        } catch (error: any) {
+          res.json({
+            jsonrpc: '2.0',
+            id,
+            error: {
+              code: -32603,
+              message: error.message
+            }
+          });
+        }
+        break;
+        
+      default:
+        res.json({
+          jsonrpc: '2.0',
+          id,
+          error: {
+            code: -32601,
+            message: `Method not found: ${method}`
+          }
+        });
+    }
+  } else {
+    // For GET requests, return MCP server info
+    res.json({
+      mcp_version: '2025-06-18',
+      server_name: 'teamup-mcp-server',
+      description: 'MCP server for TeamUp integration'
+    });
   }
-  
+});
+
+// OpenAPI specification endpoint (separate from MCP)
+app.get('/openapi.json', (req, res) => {
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
   res.json({
     "openapi": "3.1.0",
     "info": {
