@@ -11,3 +11,4 @@ coverage/
 *~
 .claude
 projectinit.md
+src/remote-server-simple.ts

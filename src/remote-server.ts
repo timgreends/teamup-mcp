@@ -136,47 +136,11 @@ setInterval(() => {
 
 // Landing page
 app.get('/', (req, res) => {
-  const serverUrl = process.env.RAILWAY_PUBLIC_DOMAIN 
-    ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` 
-    : `http://${req.get('host')}`;
-    
-  const configExample = config.authMode === 'TOKEN' 
-    ? `{
-  "mcpServers": {
-    "teamup": {
-      "url": "${serverUrl}/mcp/sse"
-    }
-  }
-}`
-    : `{
-  "mcpServers": {
-    "teamup": {
-      "url": "${serverUrl}/mcp/sse"
-    }
-  }
-}`;
-
-  const authInstructions = config.authMode === 'TOKEN'
-    ? `<h3>🔑 Authentication Mode: Token</h3>
-        <p>This server uses direct API tokens. When you connect:</p>
-        <ol>
-          <li>You'll be prompted to enter your TeamUp access token</li>
-          <li>Get your token from TeamUp Settings → API → Access Tokens</li>
-          <li>The token will be used for all API requests</li>
-        </ol>`
-    : `<h3>🔐 Authentication Mode: OAuth</h3>
-        <p>This server uses OAuth authentication. When you connect:</p>
-        <ol>
-          <li>Use the "Initialize TeamUp" command</li>
-          <li>Click the authentication link</li>
-          <li>Log in to TeamUp and authorize</li>
-        </ol>`;
-
   res.send(`
     <!DOCTYPE html>
     <html>
     <head>
-      <title>TeamUp MCP Remote Server</title>
+      <title>TeamUp MCP Server</title>
       <style>
         body {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -197,13 +161,13 @@ app.get('/', (req, res) => {
           border-bottom: 3px solid #667eea;
           padding-bottom: 10px;
         }
-        .status {
+        .info {
           background: #e8f4f8;
           padding: 20px;
           border-radius: 4px;
           margin: 20px 0;
         }
-        .auth-mode {
+        .setup {
           background: #f0f0f0;
           padding: 20px;
           border-radius: 4px;
@@ -227,27 +191,68 @@ app.get('/', (req, res) => {
           background: none;
           padding: 0;
         }
+        .button {
+          display: inline-block;
+          background: #667eea;
+          color: white;
+          padding: 12px 24px;
+          text-decoration: none;
+          border-radius: 4px;
+          margin-top: 20px;
+        }
+        .button:hover {
+          background: #5a67d8;
+        }
       </style>
     </head>
     <body>
       <div class="container">
-        <h1>🏃 TeamUp MCP Remote Server</h1>
+        <h1>🏃 TeamUp MCP Server</h1>
         
-        <div class="status">
-          <h3>✅ Server is running</h3>
-          <p>This is a remote MCP server for TeamUp integration.</p>
-          <p><strong>Mode:</strong> ${config.authMode}</p>
+        <div class="info">
+          <h3>Connect Claude Desktop to TeamUp</h3>
+          <p>This MCP server enables Claude to manage your TeamUp events, customers, and memberships.</p>
         </div>
         
-        <div class="auth-mode">
-          ${authInstructions}
+        <div class="setup">
+          <h3>📦 Installation Instructions</h3>
+          <p>TeamUp MCP requires local installation. Follow these steps:</p>
+          
+          <h4>1. Clone and Install</h4>
+          <pre><code>git clone https://github.com/timgreends/teamup-mcp.git
+cd teamup-mcp-server
+npm install
+npm run build</code></pre>
+          
+          <h4>2. Get TeamUp Credentials</h4>
+          <ul>
+            <li>Log in to TeamUp</li>
+            <li>Go to Settings → API → Access Tokens</li>
+            <li>Create a new access token</li>
+            <li>Note your Provider ID</li>
+          </ul>
+          
+          <h4>3. Configure Claude Desktop</h4>
+          <p>Add to your <code>claude_desktop_config.json</code>:</p>
+          <pre><code>{
+  "mcpServers": {
+    "teamup": {
+      "command": "node",
+      "args": ["/path/to/teamup-mcp-server/dist/index.js"],
+      "env": {
+        "TEAMUP_AUTH_MODE": "TOKEN",
+        "TEAMUP_ACCESS_TOKEN": "your-token",
+        "TEAMUP_PROVIDER_ID": "your-provider-id"
+      }
+    }
+  }
+}</code></pre>
+          
+          <h4>4. Restart Claude Desktop</h4>
+          <p>Quit and restart Claude Desktop to load the integration.</p>
         </div>
         
-        <h3>🔌 Connect from Claude Desktop</h3>
-        <p>Add this to your Claude Desktop configuration:</p>
-        <pre><code>${configExample}</code></pre>
-        
-        <p>Then restart Claude Desktop and use the TeamUp integration!</p>
+        <a href="https://github.com/timgreends/teamup-mcp" class="button">View on GitHub</a>
       </div>
     </body>
     </html>
