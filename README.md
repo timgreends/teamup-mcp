@@ -114,12 +114,18 @@ If you prefer OAuth authentication:
 
 ## ChatGPT Support (Remote Server)
 
-The TeamUp MCP server can be deployed as a remote server for use with ChatGPT:
+ChatGPT uses OpenAPI Actions, not MCP. To use with ChatGPT:
 
 1. Deploy to a hosting service (Railway, Render, etc.)
-2. Set environment variables for authentication
-3. Add to ChatGPT via Settings → Actions
-4. Import from: `https://your-domain.com/.well-known/mcp.json`
+2. Set environment variables in your hosting platform:
+   - `TEAMUP_ACCESS_TOKEN` - Your TeamUp API token
+   - `TEAMUP_PROVIDER_ID` - Your Provider ID
+   - `TEAMUP_REQUEST_MODE=provider` - For full access
+3. In ChatGPT:
+   - Go to Settings → Actions
+   - Click "Create new action"
+   - Import schema from: `https://your-domain.com/openapi.json`
+   - Authentication: None (server handles auth)
 
 ## Remote Server Deployment
 

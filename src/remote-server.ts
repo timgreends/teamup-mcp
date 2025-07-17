@@ -357,19 +357,88 @@ app.use((req, res, next) => {
   next();
 });
 
-// OpenAI MCP endpoint - keep simple for now
-app.get('/.well-known/mcp.json', (req, res) => {
+// OpenAPI specification for ChatGPT Actions
+app.get('/openapi.json', (req, res) => {
   const baseUrl = `${req.protocol}://${req.get('host')}`;
   res.json({
-    "mcp": {
-      "version": "0.1.0",
-      "name": "TeamUp MCP Server",
-      "description": "Connect ChatGPT to TeamUp for managing events, customers, and memberships",
-      "server_url": `${baseUrl}/mcp`,
-      "capabilities": {
-        "tools": true,
-        "resources": false,
-        "prompts": false
+    "openapi": "3.1.0",
+    "info": {
+      "title": "TeamUp API",
+      "description": "Manage TeamUp events, customers, and memberships",
+      "version": "1.0.0"
+    },
+    "servers": [
+      {
+        "url": baseUrl
+      }
+    ],
+    "paths": {
+      "/api/events": {
+        "get": {
+          "operationId": "listEvents",
+          "summary": "List events",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "schema": { "type": "integer" }
+            },
+            {
+              "name": "page_size",
+              "in": "query",
+              "schema": { "type": "integer" }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "List of events",
+              "content": {
+                "application/json": {
+                  "schema": { "type": "object" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/customers": {
+        "get": {
+          "operationId": "listCustomers",
+          "summary": "List customers",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "schema": { "type": "integer" }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "List of customers",
+              "content": {
+                "application/json": {
+                  "schema": { "type": "object" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/memberships": {
+        "get": {
+          "operationId": "listMemberships",
+          "summary": "List memberships",
+          "responses": {
+            "200": {
+              "description": "List of memberships",
+              "content": {
+                "application/json": {
+                  "schema": { "type": "object" }
+                }
+              }
+            }
+          }
+        }
       }
     }
   });
@@ -957,6 +1026,107 @@ declare global {
     }
   }
 }
+
+// API endpoints for ChatGPT Actions
+app.get('/api/events', async (req, res) => {
+  try {
+    // Use server token if available, otherwise return error
+    if (!config.accessToken) {
+      return res.status(400).json({
+        error: 'No authentication token available',
+        message: 'Server needs TEAMUP_ACCESS_TOKEN environment variable'
+      });
+    }
+
+    const axiosInstance = axios.create({
+      baseURL: config.baseUrl,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': `Token ${config.accessToken}`,
+        ...(config.providerId && { 'TeamUp-Provider-ID': config.providerId }),
+        'TeamUp-Request-Mode': config.requestMode
+      }
+    });
+
+    const response = await axiosInstance.get('/events', {
+      params: {
+        page: req.query.page,
+        page_size: req.query.page_size
+      }
+    });
+
+    res.json(response.data);
+  } catch (error: any) {
+    console.error('Error fetching events:', error.response?.data || error.message);
+    res.status(error.response?.status || 500).json({
+      error: error.response?.data || { message: error.message }
+    });
+  }
+});
+
+app.get('/api/customers', async (req, res) => {
+  try {
+    if (!config.accessToken) {
+      return res.status(400).json({
+        error: 'No authentication token available',
+        message: 'Server needs TEAMUP_ACCESS_TOKEN environment variable'
+      });
+    }
+
+    const axiosInstance = axios.create({
+      baseURL: config.baseUrl,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': `Token ${config.accessToken}`,
+        ...(config.providerId && { 'TeamUp-Provider-ID': config.providerId }),
+        'TeamUp-Request-Mode': config.requestMode
+      }
+    });
+
+    const response = await axiosInstance.get('/customers', {
+      params: { page: req.query.page }
+    });
+
+    res.json(response.data);
+  } catch (error: any) {
+    console.error('Error fetching customers:', error.response?.data || error.message);
+    res.status(error.response?.status || 500).json({
+      error: error.response?.data || { message: error.message }
+    });
+  }
+});
+
+app.get('/api/memberships', async (req, res) => {
+  try {
+    if (!config.accessToken) {
+      return res.status(400).json({
+        error: 'No authentication token available',
+        message: 'Server needs TEAMUP_ACCESS_TOKEN environment variable'
+      });
+    }
+
+    const axiosInstance = axios.create({
+      baseURL: config.baseUrl,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': `Token ${config.accessToken}`,
+        ...(config.providerId && { 'TeamUp-Provider-ID': config.providerId }),
+        'TeamUp-Request-Mode': config.requestMode
+      }
+    });
+
+    const response = await axiosInstance.get('/memberships');
+    res.json(response.data);
+  } catch (error: any) {
+    console.error('Error fetching memberships:', error.response?.data || error.message);
+    res.status(error.response?.status || 500).json({
+      error: error.response?.data || { message: error.message }
+    });
+  }
+});
 
 // Catch-all route to debug what ChatGPT is looking for
 app.get('*', (req, res) => {
