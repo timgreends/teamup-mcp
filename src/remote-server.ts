@@ -47,6 +47,15 @@ interface UserSession {
 // In-memory session store (replace with Redis/Database in production)
 const sessions = new Map<string, UserSession>();
 
+// Debug environment variables
+console.log('=== Environment Debug ===');
+console.log('TEAMUP_AUTH_MODE:', process.env.TEAMUP_AUTH_MODE);
+console.log('TEAMUP_ACCESS_TOKEN exists:', !!process.env.TEAMUP_ACCESS_TOKEN);
+console.log('TEAMUP_ACCESS_TOKEN length:', process.env.TEAMUP_ACCESS_TOKEN?.length);
+console.log('TEAMUP_PROVIDER_ID:', process.env.TEAMUP_PROVIDER_ID);
+console.log('All env vars:', Object.keys(process.env).filter(k => k.startsWith('TEAMUP')));
+console.log('========================');
+
 // Environment configuration
 const config: TeamUpConfig = {
   authMode: (process.env.TEAMUP_AUTH_MODE as 'TOKEN' | 'OAUTH') || 'TOKEN',
@@ -70,8 +79,8 @@ if (config.authMode === 'OAUTH') {
   }
 } else if (config.authMode === 'TOKEN') {
   if (!config.accessToken) {
-    console.error('Error: TEAMUP_ACCESS_TOKEN is required for TOKEN mode');
-    process.exit(1);
+    console.warn('Warning: TEAMUP_ACCESS_TOKEN not set. Users will need to provide their own tokens.');
+    console.warn('To use a server-wide token, set TEAMUP_ACCESS_TOKEN in environment variables.');
   }
 }
 
@@ -381,7 +390,7 @@ app.post('/mcp/sse', async (req, res) => {
     }
     
     // In TOKEN mode without server token, need user to provide token
-    if (config.authMode === 'TOKEN' && !session.userProvidedToken) {
+    if (config.authMode === 'TOKEN' && !config.accessToken && !session.userProvidedToken) {
       return {
         tools: [{
           name: 'set_teamup_token',
@@ -398,6 +407,12 @@ app.post('/mcp/sse', async (req, res) => {
           }
         }]
       };
+    }
+    
+    // In TOKEN mode with user-provided token, authenticated
+    if (config.authMode === 'TOKEN' && session.userProvidedToken) {
+      session.authState = 'authenticated';
+      return { tools: getAuthenticatedTools() };
     }
     
     // In OAUTH mode, show initialize tool if not authenticated
