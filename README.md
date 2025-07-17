@@ -83,18 +83,21 @@ Once connected, you can ask Claude to:
 | TEAMUP_ACCESS_TOKEN | Yes | Your TeamUp API access token |
 | TEAMUP_PROVIDER_ID | Yes | Your TeamUp Provider ID |
 | TEAMUP_REQUEST_MODE | No | Request mode: `customer` (default) or `provider` |
-| TEAMUP_BASE_URL | No | API base URL (default: `https://goteamup.com/api/v2`) |
 
-### Important: Custom Subdomains
+### Provider Mode Configuration
 
-If your TeamUp account uses a custom subdomain (e.g., `https://yourbusiness.goteamup.com`), you must set the base URL:
+For full API access, ensure you're using provider mode:
 
 ```json
 "env": {
-  "TEAMUP_BASE_URL": "https://yourbusiness.goteamup.com/api/v2",
-  // ... other settings
+  "TEAMUP_AUTH_MODE": "TOKEN",
+  "TEAMUP_ACCESS_TOKEN": "your-access-token",
+  "TEAMUP_PROVIDER_ID": "your-provider-id",
+  "TEAMUP_REQUEST_MODE": "provider"
 }
 ```
+
+**Note**: The TeamUp API base URL (`https://goteamup.com/api/v2`) is consistent across all accounts and doesn't need to be changed.
 
 ### OAuth Mode (Advanced)
 
@@ -147,9 +150,9 @@ teamup-mcp-server/
 
 ### "mode_not_allowed" or 403 errors
 - Verify your access token is valid and active
-- Check if you're using a custom subdomain and set `TEAMUP_BASE_URL` accordingly
 - Ensure `TEAMUP_REQUEST_MODE` is set to `provider` for full access
 - Confirm your Provider ID is correct
+- Check that your access token has provider-level permissions in TeamUp
 
 ### Authentication issues
 - The server now logs detailed request/response information to help debug

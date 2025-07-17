@@ -67,7 +67,7 @@ const config: TeamUpConfig = {
   },
   accessToken: process.env.TEAMUP_ACCESS_TOKEN,
   providerId: process.env.TEAMUP_PROVIDER_ID,
-  baseUrl: process.env.TEAMUP_BASE_URL || 'https://goteamup.com/api/v2',
+  baseUrl: 'https://goteamup.com/api/v2',
   requestMode: (process.env.TEAMUP_REQUEST_MODE as 'customer' | 'provider') || 'customer',
 };
 
