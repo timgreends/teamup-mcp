@@ -28,7 +28,9 @@ interface OAuthTokens {
 }
 
 interface TeamUpConfig {
+  authMode: 'TOKEN' | 'OAUTH';
   oauth: OAuthConfig;
+  accessToken?: string;
   providerId?: string;
   baseUrl: string;
   requestMode: 'customer' | 'provider';
@@ -45,22 +47,32 @@ class TeamUpOAuthMCPServer {
 
   constructor() {
     this.config = {
+      authMode: (process.env.TEAMUP_AUTH_MODE as 'TOKEN' | 'OAUTH') || 'TOKEN',
       oauth: {
-        clientId: process.env.TEAMUP_CLIENT_ID!,
-        clientSecret: process.env.TEAMUP_CLIENT_SECRET!,
+        clientId: process.env.TEAMUP_CLIENT_ID || '',
+        clientSecret: process.env.TEAMUP_CLIENT_SECRET || '',
         redirectUri: process.env.TEAMUP_REDIRECT_URI || 'http://localhost:8080/callback',
         scope: process.env.TEAMUP_OAUTH_SCOPE || 'read_write',
         autoAuthUrl: process.env.TEAMUP_AUTO_AUTH_URL
       },
+      accessToken: process.env.TEAMUP_ACCESS_TOKEN,
       providerId: process.env.TEAMUP_PROVIDER_ID,
       baseUrl: process.env.TEAMUP_BASE_URL || 'https://goteamup.com/api/v2',
       requestMode: (process.env.TEAMUP_REQUEST_MODE as 'customer' | 'provider') || 'customer',
       callbackPort: parseInt(process.env.TEAMUP_CALLBACK_PORT || '8080')
     };
 
-    if (!this.config.oauth.clientId || !this.config.oauth.clientSecret) {
-      console.error('Error: TEAMUP_CLIENT_ID and TEAMUP_CLIENT_SECRET are required');
-      process.exit(1);
+    // Validate configuration based on auth mode
+    if (this.config.authMode === 'OAUTH') {
+      if (!this.config.oauth.clientId || !this.config.oauth.clientSecret) {
+        console.error('Error: TEAMUP_CLIENT_ID and TEAMUP_CLIENT_SECRET are required for OAUTH mode');
+        process.exit(1);
+      }
+    } else if (this.config.authMode === 'TOKEN') {
+      if (!this.config.accessToken) {
+        console.error('Error: TEAMUP_ACCESS_TOKEN is required for TOKEN mode');
+        process.exit(1);
+      }
     }
 
     this.axios = axios.create({
@@ -76,7 +88,12 @@ class TeamUpOAuthMCPServer {
 
     this.axios.interceptors.request.use(
       async (config) => {
-        if (this.tokens?.accessToken) {
+        // In TOKEN mode, use the configured access token
+        if (this.config.authMode === 'TOKEN' && this.config.accessToken) {
+          config.headers.Authorization = `Bearer ${this.config.accessToken}`;
+        }
+        // In OAUTH mode, use OAuth tokens
+        else if (this.tokens?.accessToken) {
           config.headers.Authorization = `Bearer ${this.tokens.accessToken}`;
         }
         return config;
@@ -172,6 +189,12 @@ class TeamUpOAuthMCPServer {
 
   private setupHandlers() {
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
+      // In TOKEN mode, skip authentication
+      if (this.config.authMode === 'TOKEN') {
+        return { tools: this.getAuthenticatedTools() };
+      }
+
+      // In OAUTH mode, require authentication
       if (this.authState !== 'authenticated') {
         return {
           tools: [{
@@ -193,10 +216,23 @@ class TeamUpOAuthMCPServer {
       
       try {
         if (name === 'initialize_teamup') {
+          if (this.config.authMode === 'TOKEN') {
+            return {
+              content: [{
+                type: 'text',
+                text: 'This server is configured for TOKEN authentication. No initialization needed.'
+              }]
+            };
+          }
           return await this.initializeTeamUp();
         }
 
-        if (this.authState !== 'authenticated') {
+        // In TOKEN mode, skip authentication check
+        if (this.config.authMode === 'TOKEN') {
+          // Continue to handle the request
+        }
+        // In OAUTH mode, require authentication
+        else if (this.authState !== 'authenticated') {
           return {
             content: [{
               type: 'text',
@@ -576,13 +612,18 @@ This will:
   async start() {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    console.error('TeamUp OAuth MCP Server started');
-    console.error(`Callback URL: ${this.config.oauth.redirectUri}`);
+    console.error('TeamUp MCP Server started');
+    console.error(`Authentication mode: ${this.config.authMode}`);
     
-    if (this.authState === 'authenticated') {
-      console.error('Using stored authentication tokens');
+    if (this.config.authMode === 'TOKEN') {
+      console.error('Using configured access token');
     } else {
-      console.error('Authentication required - use "initialize_teamup" tool to begin');
+      console.error(`OAuth callback URL: ${this.config.oauth.redirectUri}`);
+      if (this.authState === 'authenticated') {
+        console.error('Using stored authentication tokens');
+      } else {
+        console.error('Authentication required - use "initialize_teamup" tool to begin');
+      }
     }
   }
 }
