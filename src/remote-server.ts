@@ -1424,6 +1424,200 @@ app.get('/debug/test-api', async (req, res) => {
   res.json(results);
 });
 
+// OAuth test page
+app.get('/oauth-test', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>TeamUp OAuth Test</title>
+        <style>
+            body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+            .section { margin: 20px 0; padding: 20px; border: 1px solid #ccc; border-radius: 5px; }
+            input, select { width: 100%; padding: 5px; margin: 5px 0; }
+            button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+            button:hover { background: #0056b3; }
+            pre { background: #f5f5f5; padding: 10px; overflow-x: auto; }
+            .error { color: red; }
+            .success { color: green; }
+        </style>
+    </head>
+    <body>
+        <h1>TeamUp OAuth Token Generator</h1>
+        
+        <div class="section">
+            <h2>OAuth Application Settings</h2>
+            <p><strong>Redirect URI:</strong> ${req.protocol}://${req.get('host')}/oauth-callback</p>
+            <p>Make sure this matches exactly in your TeamUp OAuth app settings!</p>
+        </div>
+        
+        <div class="section">
+            <h2>Start Authorization</h2>
+            <form action="/oauth-start" method="get">
+                <label>Client ID:</label>
+                <input type="text" name="client_id" required placeholder="your-client-id">
+                
+                <label>Scope:</label>
+                <select name="scope">
+                    <option value="read">read</option>
+                    <option value="read_write" selected>read_write</option>
+                </select>
+                
+                <button type="submit">Start OAuth Flow</button>
+            </form>
+        </div>
+        
+        <div class="section">
+            <h2>Recent Results</h2>
+            <div id="results">Check console logs after completing OAuth flow</div>
+        </div>
+    </body>
+    </html>
+  `);
+});
+
+// OAuth start endpoint
+app.get('/oauth-start', (req, res) => {
+  const { client_id, scope } = req.query;
+  const redirect_uri = `${req.protocol}://${req.get('host')}/oauth-callback`;
+  const state = crypto.randomBytes(16).toString('hex');
+  
+  // Store state for verification (in production, use a proper session store)
+  sessions.set(`oauth_${state}`, {
+    id: state,
+    clientId: client_id as string,
+    createdAt: new Date(),
+    lastAccess: new Date(),
+    authState: 'waiting_for_auth'
+  } as any);
+  
+  const params = new URLSearchParams({
+    client_id: client_id as string,
+    redirect_uri,
+    response_type: 'code',
+    scope: scope as string || 'read_write',
+    state
+  });
+  
+  const authUrl = `https://goteamup.com/api/auth/authorize?${params.toString()}`;
+  res.redirect(authUrl);
+});
+
+// OAuth callback with token exchange
+app.get('/oauth-callback', async (req, res) => {
+  const { code, state, error } = req.query;
+  
+  if (error) {
+    res.send(`<h1>OAuth Error</h1><p>${error}</p><a href="/oauth-test">Try again</a>`);
+    return;
+  }
+  
+  const session = sessions.get(`oauth_${state}`);
+  if (!session) {
+    res.send(`<h1>Invalid state</h1><a href="/oauth-test">Try again</a>`);
+    return;
+  }
+  
+  try {
+    // Exchange code for token
+    const formData = new URLSearchParams();
+    formData.append('client_id', (session as any).clientId || config.oauth.clientId);
+    formData.append('client_secret', config.oauth.clientSecret);
+    formData.append('code', code as string);
+    
+    console.log('[OAuth] Exchanging code for token...');
+    
+    const tokenResponse = await axios.post(
+      'https://goteamup.com/api/auth/access_token',
+      formData,
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      }
+    );
+    
+    const { access_token } = tokenResponse.data;
+    console.log('[OAuth] Token received:', access_token);
+    
+    // Test the token immediately
+    const testResults = {
+      token: access_token,
+      tests: [] as any[]
+    };
+    
+    // Test provider mode
+    try {
+      await axios.get('https://goteamup.com/api/v2/events', {
+        headers: {
+          'Authorization': `Token ${access_token}`,
+          'TeamUp-Provider-ID': String(config.providerId),
+          'TeamUp-Request-Mode': 'provider'
+        },
+        params: { page_size: 1 }
+      });
+      testResults.tests.push({ mode: 'provider', success: true });
+      console.log('[OAuth] ✓ Provider mode works!');
+    } catch (err: any) {
+      testResults.tests.push({ 
+        mode: 'provider', 
+        success: false, 
+        error: err.response?.data 
+      });
+      console.log('[OAuth] ✗ Provider mode failed:', err.response?.data);
+    }
+    
+    // Test customer mode
+    try {
+      await axios.get('https://goteamup.com/api/v2/events', {
+        headers: {
+          'Authorization': `Token ${access_token}`,
+          'TeamUp-Provider-ID': String(config.providerId),
+          'TeamUp-Request-Mode': 'customer'
+        },
+        params: { page_size: 1 }
+      });
+      testResults.tests.push({ mode: 'customer', success: true });
+      console.log('[OAuth] ✓ Customer mode works!');
+    } catch (err: any) {
+      testResults.tests.push({ 
+        mode: 'customer', 
+        success: false, 
+        error: err.response?.data 
+      });
+      console.log('[OAuth] ✗ Customer mode failed:', err.response?.data);
+    }
+    
+    // Clean up session
+    sessions.delete(`oauth_${state}`);
+    
+    res.send(`
+      <h1>OAuth Complete!</h1>
+      <div style="max-width: 800px; margin: 20px auto;">
+        <h2>Access Token:</h2>
+        <pre style="background: #f5f5f5; padding: 10px; word-wrap: break-word;">${access_token}</pre>
+        
+        <h2>Test Results:</h2>
+        <pre style="background: #f5f5f5; padding: 10px;">${JSON.stringify(testResults, null, 2)}</pre>
+        
+        <h2>Update Railway Environment:</h2>
+        <p>If provider mode worked, update your Railway environment variable:</p>
+        <pre style="background: #f5f5f5; padding: 10px;">TEAMUP_ACCESS_TOKEN=${access_token}</pre>
+        
+        <a href="/oauth-test">Test another token</a>
+      </div>
+    `);
+    
+  } catch (error: any) {
+    console.error('[OAuth] Token exchange error:', error.response?.data || error.message);
+    res.send(`
+      <h1>Token Exchange Failed</h1>
+      <pre>${JSON.stringify(error.response?.data || error.message, null, 2)}</pre>
+      <a href="/oauth-test">Try again</a>
+    `);
+  }
+});
+
 // Catch-all route to debug what ChatGPT is looking for
 app.get('*', (req, res) => {
   console.log(`[404] Unknown route requested: ${req.method} ${req.path}`);
@@ -1436,7 +1630,8 @@ app.get('*', (req, res) => {
       '/mcp/messages',
       '/mcp/sse',
       '/debug/config',
-      '/debug/test-api'
+      '/debug/test-api',
+      '/oauth-test'
     ]
   });
 });
