@@ -661,30 +661,13 @@ app.get('/mcp/tools', (req, res) => {
   });
 });
 
-// OpenAI MCP SSE endpoint
-app.get('/mcp/messages', async (req, res) => {
-  // Set SSE headers
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive',
-    'Access-Control-Allow-Origin': '*'
-  });
-
-  // Create a test session without auth
-  const sessionId = crypto.randomBytes(32).toString('hex');
-  const session: UserSession = {
-    id: sessionId,
-    authState: 'authenticated', // Skip auth for testing
-    userProvidedToken: config.accessToken, // Use server token for testing
-    createdAt: new Date(),
-    lastAccess: new Date()
-  };
-  sessions.set(sessionId, session);
-
-  // Handle the OpenAI MCP connection
-  await handleOpenAIMCP(req, res, session);
-});
+// OpenAI MCP endpoint (disabled due to connection issues)
+// app.get('/mcp/messages', async (req, res) => {
+//   res.status(501).json({
+//     error: 'OpenAI MCP endpoint temporarily disabled',
+//     message: 'Use the ChatGPT Actions API endpoints instead'
+//   });
+// });
 
 
 // Claude MCP SSE endpoint (existing)
@@ -986,164 +969,7 @@ This will:
   });
 });
 
-async function handleOpenAIMCP(req: any, res: any, session: UserSession) {
-  // Create axios instance for this session
-  const axiosInstance = axios.create({
-    baseURL: config.baseUrl,
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-      ...(config.providerId && { 'TeamUp-Provider-ID': String(config.providerId) }),
-      'TeamUp-Request-Mode': config.requestMode
-    },
-    timeout: 30000
-  });
-  
-  // Add auth interceptor
-  axiosInstance.interceptors.request.use(
-    async (reqConfig) => {
-      const token = session.userProvidedToken || config.accessToken;
-      if (token) {
-        reqConfig.headers.Authorization = `Token ${token}`;
-      }
-      return reqConfig;
-    },
-    (error) => Promise.reject(error)
-  );
-
-  // Create MCP server
-  const server = new Server(
-    {
-      name: 'teamup-openai-server',
-      version: '1.0.0',
-    },
-    {
-      capabilities: {
-        tools: {},
-      },
-    }
-  );
-
-  // Set up handlers (similar to Claude version)
-  server.setRequestHandler(ListToolsRequestSchema, async () => {
-    if (config.authMode === 'TOKEN' && config.accessToken) {
-      session.authState = 'authenticated';
-      return { tools: getAuthenticatedTools() };
-    }
-    
-    if (!session.userProvidedToken) {
-      return {
-        tools: [{
-          name: 'set_teamup_token',
-          description: 'Set your TeamUp access token for API access',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              token: {
-                type: 'string',
-                description: 'Your TeamUp access token'
-              }
-            },
-            required: ['token']
-          }
-        }]
-      };
-    }
-    
-    return { tools: getAuthenticatedTools() };
-  });
-
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const { name, arguments: args } = request.params;
-    
-    try {
-      if (name === 'set_teamup_token') {
-        const tokenArgs = args as any;
-        session.userProvidedToken = tokenArgs.token;
-        session.authState = 'authenticated';
-        
-        return {
-          content: [{
-            type: 'text',
-            text: '✅ TeamUp token set successfully!'
-          }]
-        };
-      }
-      
-      // Handle other tools (same as Claude version)
-      const toolHandlers: Record<string, () => Promise<any>> = {
-        'list_events': async () => {
-          const response = await axiosInstance.get('/events', { params: buildQueryParams(args as any) });
-          return { content: [{ type: 'text', text: JSON.stringify(response.data, null, 2) }] };
-        },
-        'get_event': async () => {
-          const { id, ...params } = args as any;
-          const response = await axiosInstance.get(`/events/${id}`, { params });
-          return { content: [{ type: 'text', text: JSON.stringify(response.data, null, 2) }] };
-        },
-        'register_for_event': async () => {
-          const regArgs = args as any;
-          const response = await axiosInstance.post(`/events/${regArgs.event_id}/register`, {
-            customer: regArgs.customer_id,
-            customer_membership: regArgs.customer_membership_id,
-            event: regArgs.event_id
-          });
-          return { content: [{ type: 'text', text: JSON.stringify(response.data, null, 2) }] };
-        },
-        'list_customers': async () => {
-          const response = await axiosInstance.get('/customers', { params: buildQueryParams(args as any) });
-          return { content: [{ type: 'text', text: JSON.stringify(response.data, null, 2) }] };
-        },
-        'get_customer': async () => {
-          const { id, ...params } = args as any;
-          const response = await axiosInstance.get(`/customers/${id}`, { params });
-          return { content: [{ type: 'text', text: JSON.stringify(response.data, null, 2) }] };
-        },
-        'create_customer': async () => {
-          const createArgs = args as any;
-          if (!validateEmail(createArgs.email)) {
-            throw new Error('Invalid email format');
-          }
-          const response = await axiosInstance.post('/customers', createArgs);
-          return { content: [{ type: 'text', text: JSON.stringify(response.data, null, 2) }] };
-        },
-        'list_memberships': async () => {
-          const response = await axiosInstance.get('/memberships', { params: args as any });
-          return { content: [{ type: 'text', text: JSON.stringify(response.data, null, 2) }] };
-        },
-        'get_membership': async () => {
-          const { id, ...params } = args as any;
-          const response = await axiosInstance.get(`/memberships/${id}`, { params });
-          return { content: [{ type: 'text', text: JSON.stringify(response.data, null, 2) }] };
-        }
-      };
-
-      if (toolHandlers[name]) {
-        return await toolHandlers[name]();
-      } else {
-        throw new Error(`Unknown tool: ${name}`);
-      }
-    } catch (error: any) {
-      const apiError = handleAPIError(error);
-      return {
-        content: [{
-          type: 'text',
-          text: `Error: ${apiError.message}\nCode: ${apiError.code}\nStatus: ${apiError.statusCode || 'N/A'}`
-        }]
-      };
-    }
-  });
-
-  // Create SSE transport for OpenAI
-  const transport = new SSEServerTransport('/mcp/messages', res);
-  await server.connect(transport);
-
-  // Keep connection alive
-  req.on('close', () => {
-    transport.close();
-    sessions.delete(session.id);
-  });
-}
+// Removed handleOpenAIMCP function - was causing connection issues
 
 function getAuthenticatedTools(): Tool[] {
   return [
@@ -1838,7 +1664,6 @@ app.get('*', (req, res) => {
     availableEndpoints: [
       '/.well-known/mcp.json',
       '/mcp/tools',
-      '/mcp/messages',
       '/mcp/sse',
       '/api/events',
       '/api/events/{id}',
