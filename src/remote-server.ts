@@ -1014,6 +1014,12 @@ async function handleMCPRequest(req: any, res: any) {
         });
         break;
         
+      case 'notifications/initialized':
+        // This is a notification - no response expected
+        console.log('MCP client initialized successfully');
+        res.status(200).end();
+        break;
+        
       case 'tools/list':
         res.json({
           jsonrpc: '2.0',
@@ -1049,25 +1055,37 @@ async function handleMCPRequest(req: any, res: any) {
         break;
         
       default:
-        res.status(400).json({
-          jsonrpc: '2.0',
-          id,
-          error: {
-            code: -32601,
-            message: `Method not found: ${method}`
-          }
-        });
+        // Check if this is a notification (no id field)
+        if (id === undefined) {
+          console.log(`Received notification: ${method}`);
+          res.status(200).end();
+        } else {
+          res.status(400).json({
+            jsonrpc: '2.0',
+            id,
+            error: {
+              code: -32601,
+              message: `Method not found: ${method}`
+            }
+          });
+        }
     }
   } catch (error: any) {
     console.error('MCP request error:', error);
-    res.status(500).json({
-      jsonrpc: '2.0',
-      id,
-      error: {
-        code: -32603,
-        message: error.message || 'Internal error'
-      }
-    });
+    
+    // Only send error response for requests (not notifications)
+    if (id !== undefined) {
+      res.status(500).json({
+        jsonrpc: '2.0',
+        id,
+        error: {
+          code: -32603,
+          message: error.message || 'Internal error'
+        }
+      });
+    } else {
+      res.status(500).end();
+    }
   }
 }
 
