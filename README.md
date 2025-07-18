@@ -4,11 +4,13 @@ Connect Claude Desktop and ChatGPT to TeamUp for managing events, customers, and
 
 ## Features
 
-- List and view TeamUp events
-- Manage customer information
-- Track memberships
-- Register customers for events
-- Simple token-based authentication
+- 📅 List and manage TeamUp events
+- 👥 Manage customer information
+- 💳 Track memberships
+- 🎟️ Register customers for events
+- 🔐 Multiple authentication modes (Token & OAuth)
+- 🤖 Works with Claude Desktop (MCP) and ChatGPT (Actions)
+- 🚀 Provider/Admin mode support
 
 ## Quick Start
 
@@ -21,16 +23,77 @@ Connect Claude Desktop and ChatGPT to TeamUp for managing events, customers, and
    - For provider tokens: Ensure admin permissions are granted
 4. Note your Provider ID (in your account settings)
 
-### 2. Install the Server
+### 2. Deploy to Railway (Recommended)
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/teamup-mcp)
+
+Or deploy manually:
+1. Fork this repo
+2. Create a new project on Railway
+3. Deploy from GitHub
+4. Add environment variables
+5. Your server will be live at `https://your-app.up.railway.app`
+
+### Local Development
 
 ```bash
-git clone https://github.com/timgreends/teamup-mcp.git
-cd teamup-mcp-server
+# Clone the repo
+git clone <your-repo>
+cd teamup-mcp-oauth-server
+
+# Install dependencies
 npm install
+
+# Copy env example
+cp .env.example .env
+
+# Edit .env with your credentials
+# Build and run
 npm run build
+npm start
 ```
 
-### 3. Configure Claude Desktop
+## Environment Variables
+
+### Token Mode (Simple)
+| Variable | Required | Description |
+|----------|----------|-------------|
+| TEAMUP_AUTH_MODE | No | Set to 'TOKEN' (default) |
+| TEAMUP_ACCESS_TOKEN | Yes | Your TeamUp API access token |
+| TEAMUP_PROVIDER_ID | Yes | Your TeamUp Provider ID |
+| TEAMUP_REQUEST_MODE | No | 'customer' or 'provider' (default: provider) |
+
+### OAuth Mode (Advanced)
+| Variable | Required | Description |
+|----------|----------|-------------|
+| TEAMUP_AUTH_MODE | Yes | Set to 'OAUTH' |
+| TEAMUP_CLIENT_ID | Yes | Your TeamUp OAuth Client ID |
+| TEAMUP_CLIENT_SECRET | Yes | Your TeamUp OAuth Client Secret |
+| TEAMUP_REDIRECT_URI | Yes | OAuth callback URL (e.g., https://your-app.up.railway.app/callback) |
+| TEAMUP_PROVIDER_ID | Yes | Your TeamUp Provider ID |
+| TEAMUP_REQUEST_MODE | No | 'customer' or 'provider' (default: provider) |
+
+## Getting TeamUp Credentials
+
+### For Token Mode
+1. Log in to TeamUp
+2. Go to Settings → API → Access Tokens
+3. Create a new access token with appropriate permissions
+4. Find your Provider ID in account settings
+
+### For OAuth Mode (Generates Provider Tokens)
+1. Log in to TeamUp
+2. Go to Settings → Integrations → Customer API
+3. Create a new application:
+   - Name: Your App Name
+   - Redirect URI: `https://your-app.up.railway.app/callback`
+   - Scopes: read_write
+4. Copy Client ID and Client Secret
+5. Use the OAuth flow at `/oauth-test` to generate provider tokens
+
+## Integration Setup
+
+### Claude Desktop Configuration
 
 Find your Claude Desktop configuration file:
 - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
@@ -48,25 +111,39 @@ Add the TeamUp server configuration:
       "env": {
         "TEAMUP_AUTH_MODE": "TOKEN",
         "TEAMUP_ACCESS_TOKEN": "your-teamup-access-token",
-        "TEAMUP_PROVIDER_ID": "your-provider-id"
+        "TEAMUP_PROVIDER_ID": "your-provider-id",
+        "TEAMUP_REQUEST_MODE": "provider"
       }
     }
   }
 }
 ```
 
-Replace:
-- `/path/to/teamup-mcp-server` with the actual path where you cloned the repo
-- `your-teamup-access-token` with your TeamUp access token
-- `your-provider-id` with your TeamUp Provider ID
+### ChatGPT Actions Setup
 
-### 4. Restart Claude Desktop
+1. Deploy server to Railway or another hosting service
+2. In ChatGPT:
+   - Go to Settings → Actions
+   - Click "Create new action"
+   - Import schema from: `https://your-app.up.railway.app/openapi.json`
+   - Authentication: None (server handles auth)
+   - Save the action
 
-Quit Claude Desktop completely and restart it. The TeamUp integration should now be available.
+### Remote Server (For ChatGPT/Web Access)
+
+Deploy the remote server by running:
+```bash
+npm run start:remote
+```
+
+Or use the main start command which runs the remote server:
+```bash
+npm start
+```
 
 ## Usage
 
-Once connected, you can ask Claude to:
+Once connected, you can ask your AI assistant to:
 
 - "List today's TeamUp events"
 - "Show me customer John Doe in TeamUp"
@@ -75,128 +152,74 @@ Once connected, you can ask Claude to:
 - "Get details for TeamUp event ID 123"
 - "Register customer 456 for event 789 in TeamUp"
 
-## Configuration Options
+### Available Tools
 
-### Environment Variables
+- `list_events` - List all events with optional filters
+- `get_event` - Get details for a specific event
+- `list_customers` - List all customers
+- `get_customer` - Get details for a specific customer
+- `create_customer` - Create a new customer
+- `update_customer` - Update customer information
+- `list_memberships` - List all available memberships
+- `register_for_event` - Register a customer for an event
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| TEAMUP_AUTH_MODE | No | Authentication mode: `TOKEN` (default) or `OAUTH` |
-| TEAMUP_ACCESS_TOKEN | Yes | Your TeamUp API access token |
-| TEAMUP_PROVIDER_ID | Yes | Your TeamUp Provider ID |
-| TEAMUP_REQUEST_MODE | No | Request mode: `customer` (default) or `provider` |
+## Deployment Options
 
-### Provider Mode Configuration
+### Railway (Easiest)
+- Auto-deploys from GitHub
+- Built-in environment variable management
+- Free tier available
 
-For full API access, ensure you're using provider mode:
+### Render
+- Simple deployment
+- Auto-SSL
+- Good for production
 
-```json
-"env": {
-  "TEAMUP_AUTH_MODE": "TOKEN",
-  "TEAMUP_ACCESS_TOKEN": "your-access-token",
-  "TEAMUP_PROVIDER_ID": "your-provider-id",
-  "TEAMUP_REQUEST_MODE": "provider"
-}
-```
+### Google Cloud Run
+- Serverless
+- Auto-scaling
+- Pay per use
 
-**Note**: The TeamUp API base URL (`https://goteamup.com/api/v2`) is consistent across all accounts and doesn't need to be changed.
-
-### OAuth Mode (Advanced)
-
-If you prefer OAuth authentication:
-
-1. Create an OAuth app in TeamUp Settings → Integrations → Customer API
-2. Set `TEAMUP_AUTH_MODE=OAUTH`
-3. Add these additional variables:
-   - `TEAMUP_CLIENT_ID`
-   - `TEAMUP_CLIENT_SECRET`
-   - `TEAMUP_REDIRECT_URI`
-
-## ChatGPT Support (Remote Server)
-
-ChatGPT uses OpenAPI Actions, not MCP. To use with ChatGPT:
-
-1. Deploy to a hosting service (Railway, Render, etc.)
-2. Set environment variables in your hosting platform:
-   - `TEAMUP_ACCESS_TOKEN` - Your TeamUp API token
-   - `TEAMUP_PROVIDER_ID` - Your Provider ID
-   - `TEAMUP_REQUEST_MODE=provider` - For full access
-3. In ChatGPT:
-   - Go to Settings → Actions
-   - Click "Create new action"
-   - Import schema from: `https://your-domain.com/openapi.json`
-   - Authentication: None (server handles auth)
-
-## Remote Server Deployment
-
-For deployment:
-1. Set these environment variables in your hosting platform:
-   - `TEAMUP_ACCESS_TOKEN` - Your TeamUp API token
-   - `TEAMUP_PROVIDER_ID` - Your Provider ID
-   - `TEAMUP_REQUEST_MODE` - Set to "provider"
-
-## Development
-
-### Running Locally
-
-```bash
-# Development mode with auto-reload
-npm run dev
-
-# Build TypeScript
-npm run build
-
-# Run production build
-npm start
-
-# Run remote server (for ChatGPT)
-npm run start:remote
-```
-
-### Project Structure
-
-```
-teamup-mcp-server/
-├── src/
-│   ├── index.ts          # Main MCP server
-│   ├── errors.ts         # Error handling
-│   └── utils.ts          # Utility functions
-├── dist/                 # Compiled JavaScript
-├── package.json
-└── tsconfig.json
-```
+### Local with ngrok
+- For development/testing
+- `ngrok http 8080`
+- Update redirect URI
 
 ## Troubleshooting
 
-### "Cannot find module" error
-- Make sure you've run `npm install` and `npm run build`
-- Verify the path in your Claude Desktop config is absolute, not relative
+### "mode_not_allowed" Error
+- This means your token doesn't have provider/admin permissions
+- Solution 1: Create a new token with provider permissions in TeamUp
+- Solution 2: Use OAuth mode to generate provider tokens through `/oauth-test`
 
-### "TEAMUP_ACCESS_TOKEN is required" error
-- Check that your token is correctly set in the Claude Desktop config
-- Ensure there are no typos or extra spaces
+### Authentication Issues
+- Visit `/debug/config` to check server configuration
+- Visit `/debug/test-api` to test API connectivity
+- Check Railway logs for detailed error messages
 
-### "mode_not_allowed" or 403 errors
-- **Most common cause**: Your access token doesn't have provider permissions
-  - In TeamUp, create a new access token with admin/provider permissions
-  - Customer-level tokens cannot access provider mode endpoints
-- Verify your access token is valid and active
-- Ensure `TEAMUP_REQUEST_MODE` is set to `provider` for full access
-- Confirm your Provider ID is correct
+### ChatGPT Connection Issues
+- Ensure you're using the OpenAPI endpoint: `/openapi.json`
+- Check that environment variables are set in Railway
+- Verify the server is accessible at your Railway URL
 
-### Authentication issues
-- The server now logs detailed request/response information to help debug
-- Check Claude Desktop's logs for API request details
-- Verify the Authorization header shows `Token [your-token]` format
+## Debug Endpoints
 
-### Server doesn't appear in Claude
-- Make sure Claude Desktop is completely quit and restarted
-- Check that the configuration file is valid JSON
-- Look for errors in Claude Desktop's logs
+- `/debug/config` - View current server configuration
+- `/debug/test-api` - Test API connectivity
+- `/oauth-test` - Generate OAuth tokens with provider permissions
 
-## Contributing
+## Security
 
-Pull requests are welcome! Please feel free to submit issues or enhance the functionality.
+- API tokens and client secrets are never exposed to end users
+- All credentials are stored server-side only
+- OAuth tokens are stored in memory (not persisted)
+- HTTPS required for production deployments
+
+## Support
+
+- Issues: [GitHub Issues](https://github.com/your-org/teamup-mcp)
+- TeamUp API Docs: https://goteamup.com/api/v2/docs
+- MCP Protocol: https://modelcontextprotocol.com
 
 ## License
 
