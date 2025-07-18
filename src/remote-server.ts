@@ -1369,8 +1369,13 @@ app.get('/oauth-test', (req, res) => {
         
         <div class="section">
             <h2>OAuth Application Settings</h2>
-            <p><strong>Redirect URI:</strong> ${req.protocol}://${req.get('host')}/callback</p>
-            <p>Make sure this matches exactly in your TeamUp OAuth app settings!</p>
+            <p><strong>Redirect URI:</strong> ${req.get('x-forwarded-proto') || req.protocol}://${req.get('host')}/callback</p>
+            <p>Make sure this matches EXACTLY in your TeamUp OAuth app settings!</p>
+            <p style="color: #666; font-size: 0.9em;">
+              Protocol: ${req.get('x-forwarded-proto') || req.protocol}<br>
+              Host: ${req.get('host')}<br>
+              Headers: x-forwarded-proto=${req.get('x-forwarded-proto')}, protocol=${req.protocol}
+            </p>
         </div>
         
         <div class="section">
@@ -1401,7 +1406,17 @@ app.get('/oauth-test', (req, res) => {
 // OAuth start endpoint
 app.get('/oauth-start', (req, res) => {
   const { client_id, scope } = req.query;
-  const redirect_uri = `${req.protocol}://${req.get('host')}/callback`;
+  
+  // Build redirect URI - handle potential protocol issues
+  const protocol = req.get('x-forwarded-proto') || req.protocol;
+  const host = req.get('host');
+  const redirect_uri = `${protocol}://${host}/callback`;
+  
+  console.log('[OAuth] Starting OAuth flow');
+  console.log('[OAuth] Protocol:', protocol);
+  console.log('[OAuth] Host:', host);
+  console.log('[OAuth] Redirect URI:', redirect_uri);
+  
   const state = crypto.randomBytes(16).toString('hex');
   
   // Store state for verification (in production, use a proper session store)
@@ -1422,6 +1437,7 @@ app.get('/oauth-start', (req, res) => {
   });
   
   const authUrl = `https://goteamup.com/api/auth/authorize?${params.toString()}`;
+  console.log('[OAuth] Redirecting to:', authUrl);
   res.redirect(authUrl);
 });
 
