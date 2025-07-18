@@ -12,6 +12,8 @@ import { createServer } from 'http';
 import { URL } from 'url';
 import { handleAPIError } from './errors.js';
 import { validateEmail, buildQueryParams } from './utils.js';
+import { getAllAdditionalTools } from './tools.js';
+import { TeamUpAPIImplementations } from './api-implementations.js';
 
 interface OAuthConfig {
   clientId: string;
@@ -44,6 +46,7 @@ class TeamUpOAuthMCPServer {
   private tokens?: OAuthTokens;
   private authState: 'uninitialized' | 'waiting_for_auth' | 'authenticated' = 'uninitialized';
   private callbackServer?: any;
+  private apiImplementations: TeamUpAPIImplementations;
 
   constructor() {
     this.config = {
@@ -163,6 +166,8 @@ class TeamUpOAuthMCPServer {
         },
       }
     );
+
+    this.apiImplementations = new TeamUpAPIImplementations(this.axios);
 
     this.setupHandlers();
     this.checkStoredTokens();
@@ -287,6 +292,143 @@ class TeamUpOAuthMCPServer {
             return await this.listMemberships(args);
           case 'get_membership':
             return await this.getMembership(args);
+          case 'update_customer':
+            return await this.updateCustomer(args);
+          case 'delete_customer':
+            return await this.deleteCustomer(args);
+          case 'bulk_delete_customers':
+            return await this.bulkDeleteCustomers(args);
+          case 'search_customers':
+            return await this.searchCustomers(args);
+          case 'create_event':
+            return await this.createEvent(args);
+          case 'update_event':
+            return await this.updateEvent(args);
+          case 'delete_event':
+            return await this.deleteEvent(args);
+          case 'duplicate_event':
+            return await this.duplicateEvent(args);
+          case 'cancel_event':
+            return await this.cancelEvent(args);
+          case 'unregister_from_event':
+            return await this.unregisterFromEvent(args);
+          case 'get_event_attendees':
+            return await this.getEventAttendees(args);
+          case 'mark_attendance':
+            return await this.markAttendance(args);
+          case 'get_event_registration_timelines':
+            return await this.getEventRegistrationTimelines(args);
+          case 'create_membership':
+            return await this.createMembership(args);
+          case 'update_membership':
+            return await this.updateMembership(args);
+          case 'delete_membership':
+            return await this.deleteMembership(args);
+          case 'get_membership_allotment':
+            return await this.getMembershipAllotment(args);
+          case 'initiate_membership_purchase':
+            return await this.initiateMembershipPurchase(args);
+          // Staff & Instructor Management
+          case 'list_staff':
+            return await this.apiImplementations.listStaff(args);
+          case 'get_staff':
+            return await this.apiImplementations.getStaff(args);
+          case 'create_staff':
+            return await this.apiImplementations.createStaff(args);
+          case 'update_staff':
+            return await this.apiImplementations.updateStaff(args);
+          case 'delete_staff':
+            return await this.apiImplementations.deleteStaff(args);
+          case 'list_instructors':
+            return await this.apiImplementations.listInstructors(args);
+          case 'assign_instructor':
+            return await this.apiImplementations.assignInstructor(args);
+          // Venue & Room Management
+          case 'list_venues':
+            return await this.apiImplementations.listVenues(args);
+          case 'get_venue':
+            return await this.apiImplementations.getVenue(args);
+          case 'create_venue':
+            return await this.apiImplementations.createVenue(args);
+          case 'update_venue':
+            return await this.apiImplementations.updateVenue(args);
+          case 'list_venue_rooms':
+            return await this.apiImplementations.listVenueRooms(args);
+          case 'get_venue_room':
+            return await this.apiImplementations.getVenueRoom(args);
+          case 'create_venue_room':
+            return await this.apiImplementations.createVenueRoom(args);
+          // Offering Types & Categories
+          case 'list_offering_types':
+            return await this.apiImplementations.listOfferingTypes(args);
+          case 'get_offering_type':
+            return await this.apiImplementations.getOfferingType(args);
+          case 'create_offering_type':
+            return await this.apiImplementations.createOfferingType(args);
+          case 'update_offering_type':
+            return await this.apiImplementations.updateOfferingType(args);
+          case 'list_categories':
+            return await this.apiImplementations.listCategories(args);
+          case 'get_category':
+            return await this.apiImplementations.getCategory(args);
+          // Attendance Management
+          case 'list_attendances':
+            return await this.apiImplementations.listAttendances(args);
+          case 'get_attendance':
+            return await this.apiImplementations.getAttendance(args);
+          case 'update_attendance':
+            return await this.apiImplementations.updateAttendance(args);
+          case 'bulk_update_attendances':
+            return await this.apiImplementations.bulkUpdateAttendances(args);
+          // Payment & Billing
+          case 'list_payments':
+            return await this.apiImplementations.listPayments(args);
+          case 'get_payment':
+            return await this.apiImplementations.getPayment(args);
+          case 'process_payment':
+            return await this.apiImplementations.processPayment(args);
+          case 'refund_payment':
+            return await this.apiImplementations.refundPayment(args);
+          case 'list_invoices':
+            return await this.apiImplementations.listInvoices(args);
+          case 'get_invoice':
+            return await this.apiImplementations.getInvoice(args);
+          // Discount Codes
+          case 'list_discount_codes':
+            return await this.apiImplementations.listDiscountCodes(args);
+          case 'get_discount_code':
+            return await this.apiImplementations.getDiscountCode(args);
+          case 'create_discount_code':
+            return await this.apiImplementations.createDiscountCode(args);
+          case 'update_discount_code':
+            return await this.apiImplementations.updateDiscountCode(args);
+          case 'delete_discount_code':
+            return await this.apiImplementations.deleteDiscountCode(args);
+          // Reporting & Analytics
+          case 'get_bulk_action':
+            return await this.apiImplementations.getBulkAction(args);
+          case 'list_bulk_actions':
+            return await this.apiImplementations.listBulkActions(args);
+          case 'get_provider_stats':
+            return await this.apiImplementations.getProviderStats(args);
+          // CRM & Workflows
+          case 'list_crm_workflows':
+            return await this.apiImplementations.listCrmWorkflows(args);
+          case 'get_crm_workflow':
+            return await this.apiImplementations.getCrmWorkflow(args);
+          case 'list_workflow_actions':
+            return await this.apiImplementations.listWorkflowActions(args);
+          case 'update_workflow_action':
+            return await this.apiImplementations.updateWorkflowAction(args);
+          // Integrations & Settings
+          case 'get_provider_settings':
+            return await this.apiImplementations.getProviderSettings(args);
+          case 'update_provider_settings':
+            return await this.apiImplementations.updateProviderSettings(args);
+          case 'list_terminologies':
+            return await this.apiImplementations.listTerminologies(args);
+          case 'get_terminology':
+            return await this.apiImplementations.getTerminology(args);
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
@@ -489,8 +631,8 @@ This will:
     }
   }
 
-  private getAuthenticatedTools(): Tool[] {
-    return [
+  private getAuthenticatedTools(): any[] {
+    const baseTools = [
       {
         name: 'list_events',
         description: 'List all events with optional filters',
@@ -528,6 +670,136 @@ This will:
             customer_membership_id: { type: 'number', description: 'Customer membership ID' }
           },
           required: ['event_id', 'customer_id']
+        }
+      },
+      {
+        name: 'create_event',
+        description: 'Create a new event',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            offering_type: { type: 'number', description: 'Offering type ID' },
+            venue: { type: 'number', description: 'Venue ID' },
+            venue_room: { type: 'number', description: 'Venue room ID' },
+            starts_at: { type: 'string', description: 'Event start time (ISO 8601)' },
+            ends_at: { type: 'string', description: 'Event end time (ISO 8601)' },
+            capacity: { type: 'number', description: 'Maximum capacity' },
+            instructors: { type: 'array', items: { type: 'number' }, description: 'Array of instructor IDs' },
+            categories: { type: 'array', items: { type: 'number' }, description: 'Array of category IDs' },
+            notes: { type: 'string', description: 'Event notes' },
+            is_private: { type: 'boolean', description: 'Private event flag' }
+          },
+          required: ['offering_type', 'venue', 'starts_at', 'ends_at']
+        }
+      },
+      {
+        name: 'update_event',
+        description: 'Update event details',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            id: { type: 'number', description: 'Event ID' },
+            offering_type: { type: 'number' },
+            venue: { type: 'number' },
+            venue_room: { type: 'number' },
+            starts_at: { type: 'string' },
+            ends_at: { type: 'string' },
+            capacity: { type: 'number' },
+            instructors: { type: 'array', items: { type: 'number' } },
+            categories: { type: 'array', items: { type: 'number' } },
+            notes: { type: 'string' },
+            is_private: { type: 'boolean' }
+          },
+          required: ['id']
+        }
+      },
+      {
+        name: 'delete_event',
+        description: 'Delete an event',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            id: { type: 'number', description: 'Event ID' }
+          },
+          required: ['id']
+        }
+      },
+      {
+        name: 'duplicate_event',
+        description: 'Duplicate an existing event',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            id: { type: 'number', description: 'Event ID to duplicate' },
+            starts_at: { type: 'string', description: 'New event start time (ISO 8601)' },
+            ends_at: { type: 'string', description: 'New event end time (ISO 8601)' }
+          },
+          required: ['id', 'starts_at', 'ends_at']
+        }
+      },
+      {
+        name: 'cancel_event',
+        description: 'Cancel an event',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            id: { type: 'number', description: 'Event ID' },
+            reason: { type: 'string', description: 'Cancellation reason' },
+            notify_attendees: { type: 'boolean', description: 'Send notifications to attendees' }
+          },
+          required: ['id']
+        }
+      },
+      {
+        name: 'unregister_from_event',
+        description: 'Unregister a customer from an event',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            event_id: { type: 'number', description: 'Event ID' },
+            customer_id: { type: 'number', description: 'Customer ID' }
+          },
+          required: ['event_id', 'customer_id']
+        }
+      },
+      {
+        name: 'get_event_attendees',
+        description: 'Get list of attendees for an event',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            event_id: { type: 'number', description: 'Event ID' },
+            expand: { type: 'string', description: 'Comma-separated list of fields to expand' }
+          },
+          required: ['event_id']
+        }
+      },
+      {
+        name: 'mark_attendance',
+        description: 'Mark attendance for an event registration',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            attendance_id: { type: 'number', description: 'Attendance ID' },
+            status: { 
+              type: 'string', 
+              enum: ['attended', 'no_show', 'cancelled'],
+              description: 'Attendance status' 
+            },
+            notes: { type: 'string', description: 'Attendance notes' }
+          },
+          required: ['attendance_id', 'status']
+        }
+      },
+      {
+        name: 'get_event_registration_timelines',
+        description: 'Get registration timeline settings for an event',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            event_id: { type: 'number', description: 'Event ID' }
+          },
+          required: ['event_id']
         }
       },
       {
@@ -587,8 +859,153 @@ This will:
           },
           required: ['id']
         }
+      },
+      {
+        name: 'create_membership',
+        description: 'Create a new membership',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', description: 'Membership name' },
+            description: { type: 'string', description: 'Membership description' },
+            price: { type: 'number', description: 'Price in cents' },
+            duration_days: { type: 'number', description: 'Duration in days' },
+            allotment_type: { 
+              type: 'string', 
+              enum: ['unlimited', 'limited', 'punch_card'],
+              description: 'Type of allotment' 
+            },
+            allotment_count: { type: 'number', description: 'Number of allowed visits (for limited/punch_card)' },
+            categories: { type: 'array', items: { type: 'number' }, description: 'Array of category IDs' },
+            is_active: { type: 'boolean', description: 'Active status' }
+          },
+          required: ['name', 'price', 'duration_days', 'allotment_type']
+        }
+      },
+      {
+        name: 'update_membership',
+        description: 'Update membership details',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            id: { type: 'number', description: 'Membership ID' },
+            name: { type: 'string' },
+            description: { type: 'string' },
+            price: { type: 'number' },
+            duration_days: { type: 'number' },
+            allotment_type: { 
+              type: 'string', 
+              enum: ['unlimited', 'limited', 'punch_card']
+            },
+            allotment_count: { type: 'number' },
+            categories: { type: 'array', items: { type: 'number' } },
+            is_active: { type: 'boolean' }
+          },
+          required: ['id']
+        }
+      },
+      {
+        name: 'delete_membership',
+        description: 'Delete a membership',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            id: { type: 'number', description: 'Membership ID' }
+          },
+          required: ['id']
+        }
+      },
+      {
+        name: 'get_membership_allotment',
+        description: 'Get membership allotment details',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            membership_id: { type: 'number', description: 'Membership ID' }
+          },
+          required: ['membership_id']
+        }
+      },
+      {
+        name: 'initiate_membership_purchase',
+        description: 'Initiate a membership purchase',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            membership_id: { type: 'number', description: 'Membership ID' },
+            customer_id: { type: 'number', description: 'Customer ID' },
+            payment_method: { type: 'string', description: 'Payment method' },
+            discount_code: { type: 'string', description: 'Discount code' }
+          },
+          required: ['membership_id', 'customer_id']
+        }
+      },
+      {
+        name: 'update_customer',
+        description: 'Update customer details',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            id: { type: 'number', description: 'Customer ID' },
+            first_name: { type: 'string' },
+            last_name: { type: 'string' },
+            email: { type: 'string' },
+            phone: { type: 'string' },
+            birthdate: { type: 'string', description: 'Date in YYYY-MM-DD format' },
+            notes: { type: 'string' },
+            custom_fields: { type: 'object', description: 'Custom field values' }
+          },
+          required: ['id']
+        }
+      },
+      {
+        name: 'delete_customer',
+        description: 'Delete a customer',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            id: { type: 'number', description: 'Customer ID' }
+          },
+          required: ['id']
+        }
+      },
+      {
+        name: 'bulk_delete_customers',
+        description: 'Delete multiple customers',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            customer_ids: { 
+              type: 'array', 
+              items: { type: 'number' },
+              description: 'Array of customer IDs to delete'
+            }
+          },
+          required: ['customer_ids']
+        }
+      },
+      {
+        name: 'search_customers',
+        description: 'Search customers with advanced filters',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: 'Search query' },
+            email: { type: 'string', description: 'Filter by email' },
+            phone: { type: 'string', description: 'Filter by phone' },
+            first_name: { type: 'string', description: 'Filter by first name' },
+            last_name: { type: 'string', description: 'Filter by last name' },
+            tags: { type: 'string', description: 'Comma-separated list of tags' },
+            created_after: { type: 'string', description: 'Filter by creation date (ISO 8601)' },
+            created_before: { type: 'string', description: 'Filter by creation date (ISO 8601)' },
+            page: { type: 'number' },
+            page_size: { type: 'number' }
+          }
+        }
       }
     ];
+
+    return [...baseTools, ...getAllAdditionalTools()];
   }
 
   // API implementations
@@ -654,6 +1071,150 @@ This will:
   private async getMembership(args: any) {
     const { id, ...params } = args;
     const response = await this.axios.get(`/memberships/${id}`, { params });
+    return {
+      content: [{ type: 'text', text: JSON.stringify(response.data, null, 2) }],
+    };
+  }
+
+  private async updateCustomer(args: any) {
+    const { id, ...data } = args;
+    if (data.email && !validateEmail(data.email)) {
+      throw new Error('Invalid email format');
+    }
+    const response = await this.axios.patch(`/customers/${id}`, data);
+    return {
+      content: [{ type: 'text', text: JSON.stringify(response.data, null, 2) }],
+    };
+  }
+
+  private async deleteCustomer(args: any) {
+    const { id } = args;
+    await this.axios.delete(`/customers/${id}`);
+    return {
+      content: [{ type: 'text', text: `Customer ${id} deleted successfully` }],
+    };
+  }
+
+  private async bulkDeleteCustomers(args: any) {
+    const { customer_ids } = args;
+    const response = await this.axios.post('/customers/bulk_delete', { customers: customer_ids });
+    return {
+      content: [{ type: 'text', text: JSON.stringify(response.data, null, 2) }],
+    };
+  }
+
+  private async searchCustomers(args: any) {
+    const response = await this.axios.get('/customers', { params: buildQueryParams(args) });
+    return {
+      content: [{ type: 'text', text: JSON.stringify(response.data, null, 2) }],
+    };
+  }
+
+  private async createEvent(args: any) {
+    const response = await this.axios.post('/events', args);
+    return {
+      content: [{ type: 'text', text: JSON.stringify(response.data, null, 2) }],
+    };
+  }
+
+  private async updateEvent(args: any) {
+    const { id, ...data } = args;
+    const response = await this.axios.patch(`/events/${id}`, data);
+    return {
+      content: [{ type: 'text', text: JSON.stringify(response.data, null, 2) }],
+    };
+  }
+
+  private async deleteEvent(args: any) {
+    const { id } = args;
+    await this.axios.delete(`/events/${id}`);
+    return {
+      content: [{ type: 'text', text: `Event ${id} deleted successfully` }],
+    };
+  }
+
+  private async duplicateEvent(args: any) {
+    const { id, ...data } = args;
+    const response = await this.axios.post(`/events/${id}/duplicate`, data);
+    return {
+      content: [{ type: 'text', text: JSON.stringify(response.data, null, 2) }],
+    };
+  }
+
+  private async cancelEvent(args: any) {
+    const { id, ...data } = args;
+    const response = await this.axios.patch(`/events/${id}`, { status: 'cancelled', ...data });
+    return {
+      content: [{ type: 'text', text: JSON.stringify(response.data, null, 2) }],
+    };
+  }
+
+  private async unregisterFromEvent(args: any) {
+    const { event_id, customer_id } = args;
+    await this.axios.delete(`/events/${event_id}/register`, { data: { customer: customer_id } });
+    return {
+      content: [{ type: 'text', text: `Customer ${customer_id} unregistered from event ${event_id}` }],
+    };
+  }
+
+  private async getEventAttendees(args: any) {
+    const { event_id, ...params } = args;
+    const response = await this.axios.get(`/events/${event_id}/attendances`, { params });
+    return {
+      content: [{ type: 'text', text: JSON.stringify(response.data, null, 2) }],
+    };
+  }
+
+  private async markAttendance(args: any) {
+    const { attendance_id, ...data } = args;
+    const response = await this.axios.patch(`/attendances/${attendance_id}`, data);
+    return {
+      content: [{ type: 'text', text: JSON.stringify(response.data, null, 2) }],
+    };
+  }
+
+  private async getEventRegistrationTimelines(args: any) {
+    const { event_id } = args;
+    const response = await this.axios.get(`/events/${event_id}/registration_timelines/resolved`);
+    return {
+      content: [{ type: 'text', text: JSON.stringify(response.data, null, 2) }],
+    };
+  }
+
+  private async createMembership(args: any) {
+    const response = await this.axios.post('/memberships', args);
+    return {
+      content: [{ type: 'text', text: JSON.stringify(response.data, null, 2) }],
+    };
+  }
+
+  private async updateMembership(args: any) {
+    const { id, ...data } = args;
+    const response = await this.axios.patch(`/memberships/${id}`, data);
+    return {
+      content: [{ type: 'text', text: JSON.stringify(response.data, null, 2) }],
+    };
+  }
+
+  private async deleteMembership(args: any) {
+    const { id } = args;
+    await this.axios.delete(`/memberships/${id}`);
+    return {
+      content: [{ type: 'text', text: `Membership ${id} deleted successfully` }],
+    };
+  }
+
+  private async getMembershipAllotment(args: any) {
+    const { membership_id } = args;
+    const response = await this.axios.get(`/memberships/${membership_id}/allotment`);
+    return {
+      content: [{ type: 'text', text: JSON.stringify(response.data, null, 2) }],
+    };
+  }
+
+  private async initiateMembershipPurchase(args: any) {
+    const { membership_id, ...data } = args;
+    const response = await this.axios.post(`/memberships/${membership_id}/initiate_purchase`, data);
     return {
       content: [{ type: 'text', text: JSON.stringify(response.data, null, 2) }],
     };
