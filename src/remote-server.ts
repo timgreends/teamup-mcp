@@ -407,17 +407,31 @@ app.all(['/.well-known/mcp.json', '/openapi.json'], (req, res) => {
       "/api/events": {
         "get": {
           "operationId": "listEvents",
-          "summary": "List events",
+          "summary": "List events with optional filters",
           "parameters": [
             {
               "name": "page",
               "in": "query",
-              "schema": { "type": "integer" }
+              "schema": { "type": "integer" },
+              "description": "Page number for pagination"
             },
             {
               "name": "page_size",
               "in": "query",
-              "schema": { "type": "integer" }
+              "schema": { "type": "integer" },
+              "description": "Number of results per page"
+            },
+            {
+              "name": "starts_after",
+              "in": "query",
+              "schema": { "type": "string", "format": "date-time" },
+              "description": "Filter events starting after this date"
+            },
+            {
+              "name": "starts_before",
+              "in": "query",
+              "schema": { "type": "string", "format": "date-time" },
+              "description": "Filter events starting before this date"
             }
           ],
           "responses": {
@@ -432,20 +446,169 @@ app.all(['/.well-known/mcp.json', '/openapi.json'], (req, res) => {
           }
         }
       },
+      "/api/events/{id}": {
+        "get": {
+          "operationId": "getEvent",
+          "summary": "Get details of a specific event",
+          "parameters": [
+            {
+              "name": "id",
+              "in": "path",
+              "required": true,
+              "schema": { "type": "integer" },
+              "description": "Event ID"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Event details",
+              "content": {
+                "application/json": {
+                  "schema": { "type": "object" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/events/{event_id}/register": {
+        "post": {
+          "operationId": "registerForEvent",
+          "summary": "Register a customer for an event",
+          "parameters": [
+            {
+              "name": "event_id",
+              "in": "path",
+              "required": true,
+              "schema": { "type": "integer" },
+              "description": "Event ID"
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "customer_id": {
+                      "type": "integer",
+                      "description": "Customer ID"
+                    },
+                    "customer_membership_id": {
+                      "type": "integer",
+                      "description": "Customer membership ID (optional)"
+                    }
+                  },
+                  "required": ["customer_id"]
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Registration successful",
+              "content": {
+                "application/json": {
+                  "schema": { "type": "object" }
+                }
+              }
+            }
+          }
+        }
+      },
       "/api/customers": {
         "get": {
           "operationId": "listCustomers",
-          "summary": "List customers",
+          "summary": "List customers with search",
           "parameters": [
             {
               "name": "page",
               "in": "query",
-              "schema": { "type": "integer" }
+              "schema": { "type": "integer" },
+              "description": "Page number for pagination"
+            },
+            {
+              "name": "page_size",
+              "in": "query",
+              "schema": { "type": "integer" },
+              "description": "Number of results per page"
+            },
+            {
+              "name": "query",
+              "in": "query",
+              "schema": { "type": "string" },
+              "description": "Search query"
             }
           ],
           "responses": {
             "200": {
               "description": "List of customers",
+              "content": {
+                "application/json": {
+                  "schema": { "type": "object" }
+                }
+              }
+            }
+          }
+        },
+        "post": {
+          "operationId": "createCustomer",
+          "summary": "Create a new customer",
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "first_name": {
+                      "type": "string",
+                      "description": "Customer's first name"
+                    },
+                    "last_name": {
+                      "type": "string",
+                      "description": "Customer's last name"
+                    },
+                    "email": {
+                      "type": "string",
+                      "format": "email",
+                      "description": "Customer's email address"
+                    }
+                  },
+                  "required": ["first_name", "last_name", "email"]
+                }
+              }
+            }
+          },
+          "responses": {
+            "201": {
+              "description": "Customer created successfully",
+              "content": {
+                "application/json": {
+                  "schema": { "type": "object" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/customers/{id}": {
+        "get": {
+          "operationId": "getCustomer",
+          "summary": "Get specific customer details",
+          "parameters": [
+            {
+              "name": "id",
+              "in": "path",
+              "required": true,
+              "schema": { "type": "integer" },
+              "description": "Customer ID"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Customer details",
               "content": {
                 "application/json": {
                   "schema": { "type": "object" }
@@ -459,6 +622,20 @@ app.all(['/.well-known/mcp.json', '/openapi.json'], (req, res) => {
         "get": {
           "operationId": "listMemberships",
           "summary": "List memberships",
+          "parameters": [
+            {
+              "name": "page",
+              "in": "query",
+              "schema": { "type": "integer" },
+              "description": "Page number for pagination"
+            },
+            {
+              "name": "page_size",
+              "in": "query",
+              "schema": { "type": "integer" },
+              "description": "Number of results per page"
+            }
+          ],
           "responses": {
             "200": {
               "description": "List of memberships",
@@ -508,6 +685,7 @@ app.get('/mcp/messages', async (req, res) => {
   // Handle the OpenAI MCP connection
   await handleOpenAIMCP(req, res, session);
 });
+
 
 // Claude MCP SSE endpoint (existing)
 app.post('/mcp/sse', async (req, res) => {
@@ -1154,7 +1332,9 @@ app.get('/api/events', async (req, res) => {
     const response = await axiosInstance.get('/events', {
       params: {
         page: req.query.page,
-        page_size: req.query.page_size
+        page_size: req.query.page_size,
+        starts_after: req.query.starts_after,
+        starts_before: req.query.starts_before
       }
     });
 
@@ -1188,7 +1368,11 @@ app.get('/api/customers', async (req, res) => {
     });
 
     const response = await axiosInstance.get('/customers', {
-      params: { page: req.query.page }
+      params: {
+        page: req.query.page,
+        page_size: req.query.page_size,
+        query: req.query.query
+      }
     });
 
     res.json(response.data);
@@ -1220,10 +1404,99 @@ app.get('/api/memberships', async (req, res) => {
       }
     });
 
-    const response = await axiosInstance.get('/memberships');
+    const response = await axiosInstance.get('/memberships', {
+      params: {
+        page: req.query.page,
+        page_size: req.query.page_size
+      }
+    });
     res.json(response.data);
   } catch (error: any) {
     console.error('Error fetching memberships:', error.response?.data || error.message);
+    res.status(error.response?.status || 500).json({
+      error: error.response?.data || { message: error.message }
+    });
+  }
+});
+
+// Get specific event
+app.get('/api/events/:id', async (req, res) => {
+  try {
+    if (!config.accessToken) {
+      return res.status(400).json({
+        error: 'No authentication token available',
+        message: 'Server needs TEAMUP_ACCESS_TOKEN environment variable'
+      });
+    }
+
+    const result = await handleToolCall('get_event', { event_id: req.params.id }, config);
+    res.json(result);
+  } catch (error: any) {
+    console.error('Error fetching event:', error.response?.data || error.message);
+    res.status(error.response?.status || 500).json({
+      error: error.response?.data || { message: error.message }
+    });
+  }
+});
+
+// Register for event
+app.post('/api/events/:event_id/register', async (req, res) => {
+  try {
+    if (!config.accessToken) {
+      return res.status(400).json({
+        error: 'No authentication token available',
+        message: 'Server needs TEAMUP_ACCESS_TOKEN environment variable'
+      });
+    }
+
+    const result = await handleToolCall('register_for_event', {
+      event_id: req.params.event_id,
+      customer_id: req.body.customer_id,
+      customer_membership_id: req.body.customer_membership_id
+    }, config);
+    res.json(result);
+  } catch (error: any) {
+    console.error('Error registering for event:', error.response?.data || error.message);
+    res.status(error.response?.status || 500).json({
+      error: error.response?.data || { message: error.message }
+    });
+  }
+});
+
+// Get specific customer
+app.get('/api/customers/:id', async (req, res) => {
+  try {
+    if (!config.accessToken) {
+      return res.status(400).json({
+        error: 'No authentication token available',
+        message: 'Server needs TEAMUP_ACCESS_TOKEN environment variable'
+      });
+    }
+
+    const result = await handleToolCall('get_customer', { customer_id: req.params.id }, config);
+    res.json(result);
+  } catch (error: any) {
+    console.error('Error fetching customer:', error.response?.data || error.message);
+    res.status(error.response?.status || 500).json({
+      error: error.response?.data || { message: error.message }
+    });
+  }
+});
+
+// Create customer
+app.post('/api/customers', async (req, res) => {
+  try {
+    if (!config.accessToken) {
+      return res.status(400).json({
+        error: 'No authentication token available',
+        message: 'Server needs TEAMUP_ACCESS_TOKEN environment variable'
+      });
+    }
+
+    const result = await handleToolCall('create_customer', req.body, config);
+    res.status(201).json(result);
+  } catch (error: any) {
+    console.error('Error creating customer:', error.response?.data || error.message);
     res.status(error.response?.status || 500).json({
       error: error.response?.data || { message: error.message }
     });
@@ -1567,6 +1840,12 @@ app.get('*', (req, res) => {
       '/mcp/tools',
       '/mcp/messages',
       '/mcp/sse',
+      '/api/events',
+      '/api/events/{id}',
+      '/api/events/{event_id}/register',
+      '/api/customers',
+      '/api/customers/{id}',
+      '/api/memberships',
       '/debug/config',
       '/debug/test-api',
       '/oauth-test'
