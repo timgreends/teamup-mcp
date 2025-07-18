@@ -390,7 +390,9 @@ app.all(['/.well-known/mcp.json', '/openapi.json'], (req, res) => {
     console.log('ChatGPT POST to OpenAPI endpoint:', JSON.stringify(req.body, null, 2));
   }
   
-  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  // Handle Railway's reverse proxy - use https in production
+  const protocol = req.get('x-forwarded-proto') || req.protocol;
+  const baseUrl = `${protocol}://${req.get('host')}`;
   res.json({
     "openapi": "3.1.0",
     "info": {
@@ -401,6 +403,20 @@ app.all(['/.well-known/mcp.json', '/openapi.json'], (req, res) => {
     "servers": [
       {
         "url": baseUrl
+      }
+    ],
+    "components": {
+      "securitySchemes": {
+        "bearerAuth": {
+          "type": "http",
+          "scheme": "bearer",
+          "description": "Use your TeamUp access token"
+        }
+      }
+    },
+    "security": [
+      {
+        "bearerAuth": []
       }
     ],
     "paths": {
@@ -1085,25 +1101,32 @@ declare global {
 // API endpoints for ChatGPT Actions
 app.get('/api/events', async (req, res) => {
   try {
-    // Use server token if available, otherwise return error
-    if (!config.accessToken) {
-      return res.status(400).json({
+    // Get token from Authorization header or use server token
+    const authHeader = req.headers.authorization;
+    let accessToken = config.accessToken;
+    
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      accessToken = authHeader.substring(7); // Remove 'Bearer ' prefix
+    }
+    
+    if (!accessToken) {
+      return res.status(401).json({
         error: 'No authentication token available',
-        message: 'Server needs TEAMUP_ACCESS_TOKEN environment variable'
+        message: 'Provide Authorization: Bearer <token> header or set TEAMUP_ACCESS_TOKEN environment variable'
       });
     }
 
     const headers = {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
-      'Authorization': `Token ${config.accessToken}`,
+      'Authorization': `Token ${accessToken}`,
       ...(config.providerId && { 'TeamUp-Provider-ID': String(config.providerId) }),
       'TeamUp-Request-Mode': config.requestMode
     };
     
     console.log('[API] /api/events headers:', {
       ...headers,
-      'Authorization': `Token ${config.accessToken ? '[REDACTED]' : 'missing'}`
+      'Authorization': `Token ${accessToken ? '[REDACTED]' : 'missing'}`
     });
     
     const axiosInstance = axios.create({
