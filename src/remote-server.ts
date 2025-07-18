@@ -1335,6 +1335,95 @@ app.get('/debug/config', (req, res) => {
   });
 });
 
+// Diagnostic endpoint to test API connection
+app.get('/debug/test-api', async (req, res) => {
+  const results = {
+    timestamp: new Date().toISOString(),
+    config: {
+      requestMode: config.requestMode,
+      providerId: config.providerId,
+      hasToken: !!config.accessToken
+    },
+    tests: [] as any[]
+  };
+
+  // Test 1: Basic events list
+  try {
+    const headers = {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      'Authorization': `Token ${config.accessToken}`,
+      ...(config.providerId && { 'TeamUp-Provider-ID': String(config.providerId) }),
+      'TeamUp-Request-Mode': config.requestMode
+    };
+    
+    const axiosInstance = axios.create({
+      baseURL: config.baseUrl,
+      headers,
+      timeout: 10000
+    });
+    
+    const response = await axiosInstance.get('/events', {
+      params: { page_size: 1 }
+    });
+    
+    results.tests.push({
+      test: 'GET /events',
+      success: true,
+      status: response.status,
+      dataReceived: !!response.data
+    });
+  } catch (error: any) {
+    results.tests.push({
+      test: 'GET /events',
+      success: false,
+      error: error.response?.data || error.message,
+      status: error.response?.status,
+      headers: error.config?.headers ? {
+        ...error.config.headers,
+        'Authorization': error.config.headers['Authorization'] ? 'Token [REDACTED]' : 'missing'
+      } : {}
+    });
+  }
+
+  // Test 2: Provider info (if provider mode)
+  if (config.requestMode === 'provider' && config.providerId) {
+    try {
+      const headers = {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': `Token ${config.accessToken}`,
+        'TeamUp-Provider-ID': String(config.providerId),
+        'TeamUp-Request-Mode': 'provider'
+      };
+      
+      const axiosInstance = axios.create({
+        baseURL: config.baseUrl,
+        headers,
+        timeout: 10000
+      });
+      
+      const response = await axiosInstance.get(`/providers/${config.providerId}`);
+      
+      results.tests.push({
+        test: `GET /providers/${config.providerId}`,
+        success: true,
+        status: response.status,
+        providerName: response.data?.name
+      });
+    } catch (error: any) {
+      results.tests.push({
+        test: `GET /providers/${config.providerId}`,
+        success: false,
+        error: error.response?.data || error.message,
+        status: error.response?.status
+      });
+    }
+  }
+
+  res.json(results);
+});
+
 // Catch-all route to debug what ChatGPT is looking for
 app.get('*', (req, res) => {
   console.log(`[404] Unknown route requested: ${req.method} ${req.path}`);
@@ -1346,7 +1435,8 @@ app.get('*', (req, res) => {
       '/mcp/tools',
       '/mcp/messages',
       '/mcp/sse',
-      '/debug/config'
+      '/debug/config',
+      '/debug/test-api'
     ]
   });
 });
