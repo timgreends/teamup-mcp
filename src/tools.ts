@@ -221,10 +221,11 @@ export const offeringTypesAndCategoriesTools = [
         name: { type: 'string' },
         description: { type: 'string' },
         duration_minutes: { type: 'number' },
+        schedule_type: { type: 'string', enum: ['class', 'course', 'appointment'], description: 'Type of offering schedule' },
         default_capacity: { type: 'number' },
         categories: { type: 'array', items: { type: 'number' } }
       },
-      required: ['name', 'duration_minutes']
+      required: ['name', 'duration_minutes', 'schedule_type']
     }
   },
   {
@@ -445,7 +446,7 @@ export const discountCodeTools = [
       type: 'object',
       properties: {
         code: { type: 'string', description: 'Discount code' },
-        discount_type: { type: 'string', enum: ['percentage', 'fixed'] },
+        discount_type: { type: 'string', enum: ['flat', 'percentage'], description: 'Discount type - use "flat" for fixed amount, "percentage" for percentage' },
         discount_value: { type: 'number', description: 'Discount value (percentage or cents)' },
         valid_from: { type: 'string', description: 'Valid from date (ISO 8601)' },
         valid_until: { type: 'string', description: 'Valid until date (ISO 8601)' },
@@ -463,7 +464,7 @@ export const discountCodeTools = [
       properties: {
         id: { type: 'number', description: 'Discount code ID' },
         code: { type: 'string' },
-        discount_type: { type: 'string', enum: ['percentage', 'fixed'] },
+        discount_type: { type: 'string', enum: ['flat', 'percentage'], description: 'Discount type - use "flat" for fixed amount, "percentage" for percentage' },
         discount_value: { type: 'number' },
         valid_from: { type: 'string' },
         valid_until: { type: 'string' },

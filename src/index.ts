@@ -678,6 +678,7 @@ This will:
         inputSchema: {
           type: 'object',
           properties: {
+            name: { type: 'string', description: 'Event name' },
             offering_type: { type: 'number', description: 'Offering type ID' },
             venue: { type: 'number', description: 'Venue ID' },
             venue_room: { type: 'number', description: 'Venue room ID' },
@@ -689,7 +690,7 @@ This will:
             notes: { type: 'string', description: 'Event notes' },
             is_private: { type: 'boolean', description: 'Private event flag' }
           },
-          required: ['offering_type', 'venue', 'starts_at', 'ends_at']
+          required: ['name', 'offering_type', 'venue', 'starts_at', 'ends_at']
         }
       },
       {
@@ -1097,7 +1098,7 @@ This will:
 
   private async bulkDeleteCustomers(args: any) {
     const { customer_ids } = args;
-    const response = await this.axios.post('/customers/bulk_delete', { customers: customer_ids });
+    const response = await this.axios.post('/customers/bulk_delete', { customers: {} });
     return {
       content: [{ type: 'text', text: JSON.stringify(response.data, null, 2) }],
     };
