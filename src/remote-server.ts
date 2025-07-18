@@ -387,7 +387,13 @@ app.use((req, res, next) => {
 app.all(['/.well-known/mcp.json', '/openapi.json'], (req, res) => {
   // Log POST body if present for debugging
   if (req.method === 'POST' && req.body) {
-    console.log('ChatGPT POST to OpenAPI endpoint:', JSON.stringify(req.body, null, 2));
+    console.log('OpenAI POST to OpenAPI endpoint:', JSON.stringify(req.body, null, 2));
+    
+    // Check if this is an MCP protocol request
+    if (req.body.jsonrpc === '2.0' && req.body.method) {
+      console.log('Detected MCP protocol request, handling as JSON-RPC...');
+      return handleMCPRequest(req, res);
+    }
   }
   
   // Handle Railway's reverse proxy - use https in production
@@ -985,7 +991,85 @@ This will:
   });
 });
 
-// Removed handleOpenAIMCP function - was causing connection issues
+// Handle MCP JSON-RPC requests
+async function handleMCPRequest(req: any, res: any) {
+  const { method, params, id } = req.body;
+  
+  try {
+    switch (method) {
+      case 'initialize':
+        res.json({
+          jsonrpc: '2.0',
+          id,
+          result: {
+            protocolVersion: '2025-06-18',
+            capabilities: {
+              tools: {}
+            },
+            serverInfo: {
+              name: 'teamup-mcp-server',
+              version: '1.0.0'
+            }
+          }
+        });
+        break;
+        
+      case 'tools/list':
+        res.json({
+          jsonrpc: '2.0',
+          id,
+          result: {
+            tools: getAuthenticatedTools()
+          }
+        });
+        break;
+        
+      case 'tools/call':
+        const { name, arguments: args } = params;
+        
+        // Use server token for authentication
+        const effectiveConfig = { ...config };
+        if (!effectiveConfig.accessToken) {
+          throw new Error('No authentication token available');
+        }
+        
+        const result = await handleToolCall(name, args, effectiveConfig);
+        res.json({
+          jsonrpc: '2.0',
+          id,
+          result: {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(result, null, 2)
+              }
+            ]
+          }
+        });
+        break;
+        
+      default:
+        res.status(400).json({
+          jsonrpc: '2.0',
+          id,
+          error: {
+            code: -32601,
+            message: `Method not found: ${method}`
+          }
+        });
+    }
+  } catch (error: any) {
+    console.error('MCP request error:', error);
+    res.status(500).json({
+      jsonrpc: '2.0',
+      id,
+      error: {
+        code: -32603,
+        message: error.message || 'Internal error'
+      }
+    });
+  }
+}
 
 function getAuthenticatedTools(): Tool[] {
   return [
