@@ -374,84 +374,6 @@ npm run build</code></pre>
   `);
 });
 
-// OAuth callback endpoint
-app.get('/callback', async (req, res) => {
-  const { code, error, state } = req.query;
-  const sessionId = state as string;
-  
-  if (!sessionId || !sessions.has(sessionId)) {
-    return res.status(400).send('Invalid session');
-  }
-  
-  const session = sessions.get(sessionId)!;
-  
-  if (error) {
-    session.authState = 'uninitialized';
-    return res.send(`
-      <html>
-        <body style="font-family: system-ui; padding: 40px; text-align: center;">
-          <h1>❌ Authentication Failed</h1>
-          <p>Error: ${error}</p>
-          <p>Please close this window and try again.</p>
-        </body>
-      </html>
-    `);
-  }
-  
-  if (code) {
-    try {
-      // Exchange code for tokens
-      const formData = new URLSearchParams();
-      formData.append('client_id', config.oauth.clientId);
-      formData.append('client_secret', config.oauth.clientSecret);
-      formData.append('code', code as string);
-      
-      const response = await axios.post(
-        `${config.baseUrl.replace('/api/v2', '')}/api/auth/access_token`,
-        formData,
-        {
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-          }
-        }
-      );
-      
-      session.tokens = {
-        accessToken: response.data.access_token,
-        refreshToken: response.data.refresh_token,
-        expiresAt: response.data.expires_in 
-          ? new Date(Date.now() + (response.data.expires_in * 1000))
-          : undefined
-      };
-      
-      session.authState = 'authenticated';
-      
-      res.send(`
-        <html>
-          <body style="font-family: system-ui; padding: 40px; text-align: center;">
-            <h1>✅ Successfully Connected!</h1>
-            <p>TeamUp has been connected to your AI assistant.</p>
-            <p>You can close this window and return to Claude.</p>
-            <script>
-              setTimeout(() => window.close(), 3000);
-            </script>
-          </body>
-        </html>
-      `);
-    } catch (error: any) {
-      session.authState = 'uninitialized';
-      res.send(`
-        <html>
-          <body style="font-family: system-ui; padding: 40px; text-align: center;">
-            <h1>❌ Authentication Failed</h1>
-            <p>${error.message}</p>
-            <p>Please close this window and try again.</p>
-          </body>
-        </html>
-      `);
-    }
-  }
-});
 
 // Log all requests to help debug ChatGPT
 app.use((req, res, next) => {
@@ -1447,7 +1369,7 @@ app.get('/oauth-test', (req, res) => {
         
         <div class="section">
             <h2>OAuth Application Settings</h2>
-            <p><strong>Redirect URI:</strong> ${req.protocol}://${req.get('host')}/oauth-callback</p>
+            <p><strong>Redirect URI:</strong> ${req.protocol}://${req.get('host')}/callback</p>
             <p>Make sure this matches exactly in your TeamUp OAuth app settings!</p>
         </div>
         
@@ -1479,7 +1401,7 @@ app.get('/oauth-test', (req, res) => {
 // OAuth start endpoint
 app.get('/oauth-start', (req, res) => {
   const { client_id, scope } = req.query;
-  const redirect_uri = `${req.protocol}://${req.get('host')}/oauth-callback`;
+  const redirect_uri = `${req.protocol}://${req.get('host')}/callback`;
   const state = crypto.randomBytes(16).toString('hex');
   
   // Store state for verification (in production, use a proper session store)
@@ -1504,7 +1426,7 @@ app.get('/oauth-start', (req, res) => {
 });
 
 // OAuth callback with token exchange
-app.get('/oauth-callback', async (req, res) => {
+app.get('/callback', async (req, res) => {
   const { code, state, error } = req.query;
   
   if (error) {
