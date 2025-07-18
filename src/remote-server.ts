@@ -670,8 +670,8 @@ app.get('/mcp/tools', (req, res) => {
 // });
 
 
-// Claude MCP SSE endpoint (existing)
-app.post('/mcp/sse', async (req, res) => {
+// MCP SSE endpoint (supports both GET and POST for OpenAI and Claude)
+app.all('/mcp/sse', async (req, res) => {
   const session = req.session!;
   
   // Create axios instance for this session

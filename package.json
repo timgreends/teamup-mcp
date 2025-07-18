@@ -1,6 +1,6 @@
 {
   "name": "teamup-mcp-oauth-server",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "OAuth-only MCP server for TeamUp integration",
   "main": "dist/index.js",
   "scripts": {
