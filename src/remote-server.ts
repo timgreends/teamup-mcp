@@ -72,6 +72,30 @@ async function handleToolCall(toolName: string, args: any, config: TeamUpConfig)
   });
 
   switch (toolName) {
+    case 'search':
+      const { resource_type, query, filters = {}, page, page_size } = args;
+      let searchEndpoint = '';
+      let searchParams: any = { query, page, page_size, ...filters };
+      
+      switch (resource_type) {
+        case 'customers':
+          searchEndpoint = '/customers';
+          break;
+        case 'events':
+          searchEndpoint = '/events';
+          break;
+        case 'memberships':
+          searchEndpoint = '/memberships';
+          break;
+        default:
+          throw new Error(`Invalid resource_type: ${resource_type}`);
+      }
+      
+      const searchResponse = await axiosInstance.get(searchEndpoint, {
+        params: searchParams
+      });
+      return searchResponse.data;
+      
     case 'list_events':
       const eventsResponse = await axiosInstance.get('/events', {
         params: args
@@ -109,6 +133,12 @@ async function handleToolCall(toolName: string, args: any, config: TeamUpConfig)
         params: args
       });
       return membershipsResponse.data;
+      
+    case 'search_customers':
+      const searchCustomersResponse = await axiosInstance.get('/customers', {
+        params: args
+      });
+      return searchCustomersResponse.data;
 
     case 'register_for_event':
       if (!args.event_id) throw new Error('event_id is required');
@@ -904,6 +934,10 @@ This will:
       
       // Legacy handlers for tools not in handleToolCall
       switch (name) {
+        case 'search':
+          // The search tool is handled by handleToolCall above
+          throw new Error(`Tool ${name} should have been handled by handleToolCall`);
+          
         case 'list_events':
           const eventsRes = await axiosInstance.get('/events', { params: buildQueryParams(args as any) });
           return {
@@ -1092,6 +1126,29 @@ async function handleMCPRequest(req: any, res: any) {
 function getAuthenticatedTools(): Tool[] {
   return [
     {
+      name: 'search',
+      description: 'Search for customers, events, or other resources in TeamUp',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          resource_type: { 
+            type: 'string', 
+            enum: ['customers', 'events', 'memberships'],
+            description: 'Type of resource to search for' 
+          },
+          query: { type: 'string', description: 'Search query string' },
+          filters: { 
+            type: 'object', 
+            description: 'Additional filters for the search',
+            additionalProperties: true
+          },
+          page: { type: 'number', description: 'Page number for pagination' },
+          page_size: { type: 'number', description: 'Number of results per page' }
+        },
+        required: ['resource_type', 'query']
+      }
+    },
+    {
       name: 'list_events',
       description: 'List all events with optional filters',
       inputSchema: {
@@ -1186,6 +1243,25 @@ function getAuthenticatedTools(): Tool[] {
           id: { type: 'number', description: 'Membership ID' }
         },
         required: ['id']
+      }
+    },
+    {
+      name: 'search_customers',
+      description: 'Search customers with advanced filters',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Search query' },
+          email: { type: 'string', description: 'Filter by email' },
+          phone: { type: 'string', description: 'Filter by phone' },
+          first_name: { type: 'string', description: 'Filter by first name' },
+          last_name: { type: 'string', description: 'Filter by last name' },
+          tags: { type: 'string', description: 'Comma-separated list of tags' },
+          created_after: { type: 'string', description: 'Filter by creation date (ISO 8601)' },
+          created_before: { type: 'string', description: 'Filter by creation date (ISO 8601)' },
+          page: { type: 'number' },
+          page_size: { type: 'number' }
+        }
       }
     }
   ];
