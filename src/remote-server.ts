@@ -456,6 +456,63 @@ app.all(['/.well-known/mcp.json', '/openapi.json'], (req, res) => {
       }
     ],
     "paths": {
+      "/search": {
+        "post": {
+          "operationId": "search",
+          "summary": "Search across TeamUp resources",
+          "description": "Universal search endpoint for finding customers, events, and memberships",
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "query": {
+                      "type": "string",
+                      "description": "Search query string"
+                    },
+                    "resource_type": {
+                      "type": "string",
+                      "enum": ["customers", "events", "memberships", "all"],
+                      "description": "Type of resource to search (defaults to 'all')"
+                    },
+                    "limit": {
+                      "type": "integer",
+                      "default": 10,
+                      "description": "Maximum number of results to return"
+                    }
+                  },
+                  "required": ["query"]
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Search results",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "results": {
+                        "type": "array",
+                        "items": {
+                          "type": "object"
+                        }
+                      },
+                      "total": {
+                        "type": "integer"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
       "/api/events": {
         "get": {
           "operationId": "listEvents",
@@ -1276,6 +1333,120 @@ declare global {
   }
 }
 
+// Search endpoint for ChatGPT
+app.post('/search', async (req, res) => {
+  try {
+    const { query, resource_type = 'all', limit = 10 } = req.body;
+    
+    if (!query) {
+      return res.status(400).json({
+        error: 'Missing required parameter: query'
+      });
+    }
+    
+    // Get token from Authorization header or use server token
+    const authHeader = req.headers.authorization;
+    let accessToken = config.accessToken;
+    
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      accessToken = authHeader.substring(7);
+    }
+    
+    if (!accessToken) {
+      return res.status(401).json({
+        error: 'No authentication token available'
+      });
+    }
+
+    const headers = {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      'Authorization': `Token ${accessToken}`,
+      ...(config.providerId && { 'TeamUp-Provider-ID': String(config.providerId) }),
+      'TeamUp-Request-Mode': config.requestMode
+    };
+    
+    const axiosInstance = axios.create({
+      baseURL: config.baseUrl,
+      headers
+    });
+    
+    const results: {
+      results: any[],
+      total: number
+    } = {
+      results: [],
+      total: 0
+    };
+    
+    // Search customers
+    if (resource_type === 'all' || resource_type === 'customers') {
+      try {
+        const customersResponse = await axiosInstance.get('/customers', {
+          params: { query, page_size: limit }
+        });
+        if (customersResponse.data.results) {
+          results.results.push(...customersResponse.data.results.map((c: any) => ({
+            ...c,
+            resource_type: 'customer'
+          })));
+          results.total += customersResponse.data.count || 0;
+        }
+      } catch (error) {
+        console.error('Error searching customers:', error);
+      }
+    }
+    
+    // Search events
+    if (resource_type === 'all' || resource_type === 'events') {
+      try {
+        const eventsResponse = await axiosInstance.get('/events', {
+          params: { query, page_size: limit }
+        });
+        if (eventsResponse.data.results) {
+          results.results.push(...eventsResponse.data.results.map((e: any) => ({
+            ...e,
+            resource_type: 'event'
+          })));
+          results.total += eventsResponse.data.count || 0;
+        }
+      } catch (error) {
+        console.error('Error searching events:', error);
+      }
+    }
+    
+    // Search memberships
+    if (resource_type === 'all' || resource_type === 'memberships') {
+      try {
+        const membershipsResponse = await axiosInstance.get('/memberships', {
+          params: { query, page_size: limit }
+        });
+        if (membershipsResponse.data.results) {
+          results.results.push(...membershipsResponse.data.results.map((m: any) => ({
+            ...m,
+            resource_type: 'membership'
+          })));
+          results.total += membershipsResponse.data.count || 0;
+        }
+      } catch (error) {
+        console.error('Error searching memberships:', error);
+      }
+    }
+    
+    // Limit results if searching all
+    if (resource_type === 'all' && results.results.length > limit) {
+      results.results = results.results.slice(0, limit);
+    }
+    
+    res.json(results);
+  } catch (error: any) {
+    console.error('Search error:', error);
+    res.status(error.response?.status || 500).json({
+      error: error.response?.data || { message: error.message }
+    });
+  }
+});
+
 // API endpoints for ChatGPT Actions
 app.get('/api/events', async (req, res) => {
   try {
@@ -1864,6 +2035,7 @@ app.get('*', (req, res) => {
     message: `Unknown route: ${req.path}`,
     availableEndpoints: [
       '/.well-known/mcp.json',
+      '/search',
       '/mcp/tools',
       '/mcp/sse',
       '/api/events',
