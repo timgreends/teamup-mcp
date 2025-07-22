@@ -593,9 +593,17 @@ app.post('/mcp', async (req, res) => {
 
 // OAuth endpoints for ChatGPT
 app.get('/oauth/authorize', (req, res) => {
-  const { client_id, redirect_uri, state, scope } = req.query;
+  const { client_id, redirect_uri, state, scope, response_type } = req.query;
   
-  console.log('[OAuth] Authorization request:', { client_id, redirect_uri, state, scope });
+  console.log('[OAuth] Authorization request:', { client_id, redirect_uri, state, scope, response_type });
+  
+  // Validate required parameters
+  if (!state) {
+    return res.status(400).json({
+      error: 'invalid_request',
+      error_description: 'Missing required parameter: state'
+    });
+  }
   
   // Store the original redirect URI to use later
   const sessionState = {
@@ -690,7 +698,20 @@ app.get('/oauth/callback', async (req, res) => {
   }
 });
 
+// CORS preflight for token endpoint
+app.options('/oauth/token', (req, res) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.sendStatus(200);
+});
+
 app.post('/oauth/token', async (req, res) => {
+  // Set CORS headers
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
   const { grant_type, code, client_id, client_secret, refresh_token } = req.body;
   
   console.log('[OAuth] Token request:', { grant_type, client_id, has_code: !!code, has_refresh: !!refresh_token });
@@ -738,6 +759,21 @@ app.post('/oauth/token', async (req, res) => {
       error_description: 'Grant type not supported'
     });
   }
+});
+
+// OAuth metadata endpoint
+app.get('/.well-known/oauth-authorization-server', (req, res) => {
+  const protocol = req.get('x-forwarded-proto') || req.protocol;
+  const baseUrl = `${protocol}://${req.get('host')}`;
+  
+  res.json({
+    issuer: baseUrl,
+    authorization_endpoint: `${baseUrl}/oauth/authorize`,
+    token_endpoint: `${baseUrl}/oauth/token`,
+    response_types_supported: ['code'],
+    grant_types_supported: ['authorization_code', 'refresh_token'],
+    code_challenge_methods_supported: ['plain', 'S256']
+  });
 });
 
 // OpenAPI specification for ChatGPT Actions
