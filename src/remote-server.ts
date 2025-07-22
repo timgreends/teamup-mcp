@@ -448,8 +448,49 @@ app.use((req, res, next) => {
 
 // MCP protocol endpoint for ChatGPT
 app.post('/mcp', async (req, res) => {
-  console.log('MCP protocol request:', JSON.stringify(req.body, null, 2));
-  return handleMCPRequest(req, res);
+  try {
+    console.log('[MCP] Request headers:', req.headers);
+    console.log('[MCP] Request body:', JSON.stringify(req.body, null, 2));
+    
+    // Validate request body
+    if (!req.body || typeof req.body !== 'object') {
+      console.error('[MCP] Invalid request body:', req.body);
+      return res.status(400).json({
+        jsonrpc: '2.0',
+        error: {
+          code: -32700,
+          message: 'Parse error: Invalid JSON was received'
+        }
+      });
+    }
+    
+    // Validate JSONRPC
+    if (!req.body.jsonrpc || req.body.jsonrpc !== '2.0') {
+      console.error('[MCP] Invalid or missing jsonrpc version:', req.body.jsonrpc);
+      return res.status(400).json({
+        jsonrpc: '2.0',
+        error: {
+          code: -32600,
+          message: 'Invalid Request: Missing or invalid jsonrpc version'
+        },
+        id: req.body.id || null
+      });
+    }
+    
+    return handleMCPRequest(req, res);
+  } catch (error: any) {
+    console.error('[MCP] Endpoint error:', error);
+    console.error('[MCP] Error stack:', error.stack);
+    return res.status(500).json({
+      jsonrpc: '2.0',
+      error: {
+        code: -32603,
+        message: 'Internal error',
+        data: error.message
+      },
+      id: req.body?.id || null
+    });
+  }
 });
 
 // OpenAPI specification for ChatGPT Actions
@@ -1168,7 +1209,10 @@ This will:
 
 // Handle MCP JSON-RPC requests
 async function handleMCPRequest(req: any, res: any) {
-  const { method, params, id } = req.body;
+  const { method, params, id } = req.body || {};
+  
+  // Log the request for debugging
+  console.log(`[MCP] Handling method: ${method}, id: ${id}`);
   
   try {
     switch (method) {
