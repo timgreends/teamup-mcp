@@ -495,17 +495,37 @@ app.post('/mcp', async (req, res) => {
 
 // OpenAPI specification for ChatGPT Actions
 // Handle both GET and POST requests (ChatGPT sends both)
-app.all(['/.well-known/mcp.json', '/openapi.json'], (req, res) => {
+app.all(['/.well-known/mcp.json', '/openapi.json'], async (req, res) => {
   // Log POST requests for debugging
   if (req.method === 'POST') {
     console.log('[OpenAPI Endpoint] POST request received');
-    console.log('[OpenAPI Endpoint] Headers:', req.headers);
+    console.log('[OpenAPI Endpoint] Content-Type:', req.headers['content-type']);
+    console.log('[OpenAPI Endpoint] Body type:', typeof req.body);
     console.log('[OpenAPI Endpoint] Body:', JSON.stringify(req.body, null, 2));
     
     // If it's an MCP protocol request, handle it
-    if (req.body?.jsonrpc === '2.0') {
+    if (req.body && typeof req.body === 'object' && req.body.jsonrpc === '2.0') {
       console.log('[OpenAPI Endpoint] Detected MCP protocol, handling as JSON-RPC');
-      return handleMCPRequest(req, res);
+      try {
+        await handleMCPRequest(req, res);
+        return;
+      } catch (error: any) {
+        console.error('[OpenAPI Endpoint] Error handling MCP request:', error);
+        return res.status(500).json({
+          jsonrpc: '2.0',
+          error: {
+            code: -32603,
+            message: 'Internal error',
+            data: error.message
+          },
+          id: req.body.id || null
+        });
+      }
+    } else {
+      console.log('[OpenAPI Endpoint] Not an MCP request, returning 400');
+      return res.status(400).json({
+        error: 'Invalid request to OpenAPI endpoint'
+      });
     }
   }
   
