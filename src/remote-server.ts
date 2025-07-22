@@ -61,7 +61,9 @@ async function handleToolCall(toolName: string, args: any, config: TeamUpConfig)
     'TeamUp-Request-Mode': config.requestMode
   };
   
-  console.log(`[TeamUp API] Making ${toolName} request with headers:`, {
+  console.log(`[handleToolCall] Tool: ${toolName}`);
+  console.log(`[handleToolCall] Args:`, JSON.stringify(args, null, 2));
+  console.log(`[handleToolCall] Headers:`, {
     ...headers,
     'Authorization': `Token ${config.accessToken ? '[REDACTED]' : 'missing'}`
   });
@@ -156,9 +158,12 @@ async function handleToolCall(toolName: string, args: any, config: TeamUpConfig)
         
         // Search events
         try {
+          console.log(`[handleToolCall] Searching events with query: "${query}"`);
           const eventsResponse = await axiosInstance.get('/events', {
             params: { query, page_size: 5 }
           });
+          console.log(`[handleToolCall] Events response:`, eventsResponse.data);
+          
           if (eventsResponse.data.results) {
             results.push(...eventsResponse.data.results.map((event: any) => ({
               id: `event:${event.id}`,
@@ -167,15 +172,18 @@ async function handleToolCall(toolName: string, args: any, config: TeamUpConfig)
               url: `https://app.goteamup.com/events/${event.id}`
             })));
           }
-        } catch (error) {
-          console.error('Error searching events:', error);
+        } catch (error: any) {
+          console.error('[handleToolCall] Error searching events:', error.response?.data || error.message);
         }
         
         // Search customers
         try {
+          console.log(`[handleToolCall] Searching customers with query: "${query}"`);
           const customersResponse = await axiosInstance.get('/customers', {
             params: { query, page_size: 5 }
           });
+          console.log(`[handleToolCall] Customers response:`, customersResponse.data);
+          
           if (customersResponse.data.results) {
             results.push(...customersResponse.data.results.map((customer: any) => ({
               id: `customer:${customer.id}`,
@@ -184,9 +192,12 @@ async function handleToolCall(toolName: string, args: any, config: TeamUpConfig)
               url: `https://app.goteamup.com/customers/${customer.id}`
             })));
           }
-        } catch (error) {
-          console.error('Error searching customers:', error);
+        } catch (error: any) {
+          console.error('[handleToolCall] Error searching customers:', error.response?.data || error.message);
         }
+        
+        console.log(`[handleToolCall] Total search results: ${results.length}`);
+        console.log(`[handleToolCall] Results:`, JSON.stringify(results, null, 2));
         
         // Return OpenAI-compliant format
         return results;
@@ -1494,6 +1505,9 @@ async function handleMCPRequest(req: any, res: any) {
   
   // Log the request for debugging
   console.log(`[MCP] Handling method: ${method}, id: ${id}`);
+  if (params) {
+    console.log(`[MCP] Params:`, JSON.stringify(params, null, 2));
+  }
   
   // Get user session from authorization header
   let userSession: UserSession | undefined;
