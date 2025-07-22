@@ -412,19 +412,15 @@ app.use((req, res, next) => {
   next();
 });
 
+// MCP protocol endpoint for ChatGPT
+app.post('/mcp', async (req, res) => {
+  console.log('MCP protocol request:', JSON.stringify(req.body, null, 2));
+  return handleMCPRequest(req, res);
+});
+
 // OpenAPI specification for ChatGPT Actions
-// Handle both GET and POST requests (ChatGPT sends both)
-app.all(['/.well-known/mcp.json', '/openapi.json'], (req, res) => {
-  // Log POST body if present for debugging
-  if (req.method === 'POST' && req.body) {
-    console.log('OpenAI POST to OpenAPI endpoint:', JSON.stringify(req.body, null, 2));
-    
-    // Check if this is an MCP protocol request
-    if (req.body.jsonrpc === '2.0' && req.body.method) {
-      console.log('Detected MCP protocol request, handling as JSON-RPC...');
-      return handleMCPRequest(req, res);
-    }
-  }
+// Only handle GET requests for OpenAPI spec
+app.get(['/.well-known/mcp.json', '/openapi.json'], (req, res) => {
   
   // Handle Railway's reverse proxy - use https in production
   const protocol = req.get('x-forwarded-proto') || req.protocol;
@@ -441,6 +437,10 @@ app.all(['/.well-known/mcp.json', '/openapi.json'], (req, res) => {
         "url": baseUrl
       }
     ],
+    "x-mcp": {
+      "endpoint": `${baseUrl}/mcp`,
+      "protocol": "2025-06-18"
+    },
     "components": {
       "securitySchemes": {
         "bearerAuth": {
@@ -2035,6 +2035,7 @@ app.get('*', (req, res) => {
     message: `Unknown route: ${req.path}`,
     availableEndpoints: [
       '/.well-known/mcp.json',
+      '/mcp',
       '/search',
       '/mcp/tools',
       '/mcp/sse',
