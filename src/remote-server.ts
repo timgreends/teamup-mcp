@@ -580,6 +580,155 @@ app.post('/mcp', async (req, res) => {
   }
 });
 
+// OAuth endpoints for ChatGPT
+app.get('/oauth/authorize', (req, res) => {
+  const { client_id, redirect_uri, state, scope } = req.query;
+  
+  console.log('[OAuth] Authorization request:', { client_id, redirect_uri, state, scope });
+  
+  // Store the original redirect URI to use later
+  const sessionState = {
+    state: state as string,
+    redirect_uri: redirect_uri as string,
+    client_id: client_id as string
+  };
+  sessions.set(`oauth_state_${state}`, sessionState as any);
+  
+  // For now, we'll use TeamUp's OAuth directly
+  // In production, you'd validate client_id and redirect_uri
+  const protocol = req.get('x-forwarded-proto') || req.protocol;
+  const host = req.get('host');
+  const teamupAuthUrl = new URL('https://goteamup.com/api/auth/authorize');
+  teamupAuthUrl.searchParams.set('client_id', config.oauth.clientId);
+  teamupAuthUrl.searchParams.set('redirect_uri', `${protocol}://${host}/oauth/callback`);
+  teamupAuthUrl.searchParams.set('response_type', 'code');
+  teamupAuthUrl.searchParams.set('scope', config.oauth.scope);
+  teamupAuthUrl.searchParams.set('state', state as string);
+  
+  console.log('[OAuth] Redirecting to TeamUp:', teamupAuthUrl.toString());
+  res.redirect(teamupAuthUrl.toString());
+});
+
+app.get('/oauth/callback', async (req, res) => {
+  const { code, state, error } = req.query;
+  
+  console.log('[OAuth] Callback received:', { code: !!code, state, error });
+  
+  // Retrieve the original redirect URI
+  const sessionState = sessions.get(`oauth_state_${state}`) as any;
+  const redirectUri = sessionState?.redirect_uri || 'https://chatgpt.com/oauth/callback';
+  
+  if (error) {
+    // Redirect back to ChatGPT with error
+    const errorUrl = new URL(redirectUri);
+    errorUrl.searchParams.set('error', error as string);
+    errorUrl.searchParams.set('state', state as string);
+    return res.redirect(errorUrl.toString());
+  }
+  
+  try {
+    // Exchange code for TeamUp tokens
+    const formData = new URLSearchParams();
+    formData.append('client_id', config.oauth.clientId);
+    formData.append('client_secret', config.oauth.clientSecret);
+    formData.append('code', code as string);
+    
+    const tokenResponse = await axios.post(
+      'https://goteamup.com/api/auth/access_token',
+      formData,
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      }
+    );
+    
+    const { access_token, refresh_token } = tokenResponse.data;
+    
+    // Generate a session token for this user
+    const sessionToken = crypto.randomBytes(32).toString('hex');
+    
+    // Store the tokens (in production, use a database)
+    sessions.set(sessionToken, {
+      id: sessionToken,
+      tokens: {
+        accessToken: access_token,
+        refreshToken: refresh_token
+      },
+      authState: 'authenticated',
+      createdAt: new Date(),
+      lastAccess: new Date()
+    } as UserSession);
+    
+    // Clean up state session
+    sessions.delete(`oauth_state_${state}`);
+    
+    // Redirect back to ChatGPT with our session token
+    const successUrl = new URL(redirectUri);
+    successUrl.searchParams.set('code', sessionToken);
+    successUrl.searchParams.set('state', state as string);
+    
+    console.log('[OAuth] Success, redirecting to ChatGPT');
+    res.redirect(successUrl.toString());
+  } catch (error: any) {
+    console.error('[OAuth] Token exchange error:', error);
+    const errorUrl = new URL(redirectUri);
+    errorUrl.searchParams.set('error', 'access_denied');
+    errorUrl.searchParams.set('state', state as string);
+    res.redirect(errorUrl.toString());
+  }
+});
+
+app.post('/oauth/token', async (req, res) => {
+  const { grant_type, code, client_id, client_secret, refresh_token } = req.body;
+  
+  console.log('[OAuth] Token request:', { grant_type, client_id, has_code: !!code, has_refresh: !!refresh_token });
+  
+  // Validate client credentials (in production)
+  // For now, we'll accept any client
+  
+  if (grant_type === 'authorization_code' && code) {
+    // Exchange our session token for access token
+    const session = sessions.get(code);
+    if (!session || session.authState !== 'authenticated') {
+      return res.status(400).json({
+        error: 'invalid_grant',
+        error_description: 'Invalid or expired authorization code'
+      });
+    }
+    
+    // Generate access and refresh tokens
+    const accessToken = crypto.randomBytes(32).toString('hex');
+    const refreshToken = crypto.randomBytes(32).toString('hex');
+    
+    // Update session with new tokens
+    session.id = accessToken;
+    sessions.delete(code);
+    sessions.set(accessToken, session);
+    
+    res.json({
+      access_token: accessToken,
+      token_type: 'Bearer',
+      expires_in: 3600,
+      refresh_token: refreshToken
+    });
+  } else if (grant_type === 'refresh_token' && refresh_token) {
+    // Handle refresh token
+    // For simplicity, we'll just return the same token
+    res.json({
+      access_token: refresh_token,
+      token_type: 'Bearer',
+      expires_in: 3600,
+      refresh_token: refresh_token
+    });
+  } else {
+    res.status(400).json({
+      error: 'unsupported_grant_type',
+      error_description: 'Grant type not supported'
+    });
+  }
+});
+
 // OpenAPI specification for ChatGPT Actions
 // Handle both GET and POST requests (ChatGPT sends both)
 app.all(['/.well-known/mcp.json', '/openapi.json'], async (req, res) => {
@@ -633,6 +782,20 @@ app.all(['/.well-known/mcp.json', '/openapi.json'], async (req, res) => {
     ],
     "components": {
       "securitySchemes": {
+        "oauth2": {
+          "type": "oauth2",
+          "flows": {
+            "authorizationCode": {
+              "authorizationUrl": `${baseUrl}/oauth/authorize`,
+              "tokenUrl": `${baseUrl}/oauth/token`,
+              "scopes": {
+                "read": "Read access to TeamUp data",
+                "write": "Write access to TeamUp data",
+                "read_write": "Full access to TeamUp data"
+              }
+            }
+          }
+        },
         "bearerAuth": {
           "type": "http",
           "scheme": "bearer",
@@ -641,6 +804,9 @@ app.all(['/.well-known/mcp.json', '/openapi.json'], async (req, res) => {
       }
     },
     "security": [
+      {
+        "oauth2": ["read_write"]
+      },
       {
         "bearerAuth": []
       }
@@ -1329,6 +1495,15 @@ async function handleMCPRequest(req: any, res: any) {
   // Log the request for debugging
   console.log(`[MCP] Handling method: ${method}, id: ${id}`);
   
+  // Get user session from authorization header
+  let userSession: UserSession | undefined;
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7);
+    userSession = sessions.get(token);
+    console.log(`[MCP] User session found: ${!!userSession}`);
+  }
+  
   try {
     switch (method) {
       case 'initialize':
@@ -1378,9 +1553,12 @@ async function handleMCPRequest(req: any, res: any) {
         const isOpenAICall = (req.headers['user-agent'] || '').includes('openai-mcp');
         console.log(`[MCP] tools/call for ${name}, OpenAI: ${isOpenAICall}`);
         
-        // Use server token for authentication
+        // Use user's token if available, otherwise fall back to server token
         const effectiveConfig = { ...config };
-        if (!effectiveConfig.accessToken) {
+        if (userSession && userSession.tokens?.accessToken) {
+          effectiveConfig.accessToken = userSession.tokens.accessToken;
+          console.log(`[MCP] Using user's TeamUp token`);
+        } else if (!effectiveConfig.accessToken) {
           throw new Error('No authentication token available');
         }
         
