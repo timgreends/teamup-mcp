@@ -72,7 +72,40 @@ async function handleToolCall(toolName: string, args: any, config: TeamUpConfig)
   });
 
   switch (toolName) {
-    case 'search':
+    case 'fetch': {
+      const { resource, id, filters = {} } = args;
+      let endpoint = '';
+      
+      switch (resource) {
+        case 'events':
+          endpoint = id ? `/events/${id}` : '/events';
+          break;
+        case 'customers':
+          endpoint = id ? `/customers/${id}` : '/customers';
+          break;
+        case 'memberships':
+          endpoint = id ? `/memberships/${id}` : '/memberships';
+          break;
+        case 'staff':
+          endpoint = id ? `/staff/${id}` : '/staff';
+          break;
+        case 'venues':
+          endpoint = id ? `/venues/${id}` : '/venues';
+          break;
+        case 'categories':
+          endpoint = id ? `/categories/${id}` : '/categories';
+          break;
+        default:
+          throw new Error(`Invalid resource: ${resource}`);
+      }
+      
+      const fetchResponse = await axiosInstance.get(endpoint, {
+        params: id ? {} : filters
+      });
+      return fetchResponse.data;
+    }
+      
+    case 'search': {
       const { resource_type, query, filters = {}, page, page_size } = args;
       let searchEndpoint = '';
       let searchParams: any = { query, page, page_size, ...filters };
@@ -95,6 +128,7 @@ async function handleToolCall(toolName: string, args: any, config: TeamUpConfig)
         params: searchParams
       });
       return searchResponse.data;
+    }
       
     case 'list_events':
       const eventsResponse = await axiosInstance.get('/events', {
@@ -456,6 +490,52 @@ app.get(['/.well-known/mcp.json', '/openapi.json'], (req, res) => {
       }
     ],
     "paths": {
+      "/fetch/{resource}": {
+        "get": {
+          "operationId": "fetch",
+          "summary": "Fetch resources from TeamUp",
+          "parameters": [
+            {
+              "name": "resource",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "enum": ["events", "customers", "memberships", "staff", "venues", "categories"]
+              },
+              "description": "Type of resource to fetch"
+            },
+            {
+              "name": "id",
+              "in": "query",
+              "schema": { "type": "string" },
+              "description": "Optional ID to fetch a specific resource"
+            },
+            {
+              "name": "page",
+              "in": "query",
+              "schema": { "type": "integer" },
+              "description": "Page number for pagination"
+            },
+            {
+              "name": "page_size",
+              "in": "query",
+              "schema": { "type": "integer" },
+              "description": "Number of results per page"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Resource data",
+              "content": {
+                "application/json": {
+                  "schema": { "type": "object" }
+                }
+              }
+            }
+          }
+        }
+      },
       "/search": {
         "post": {
           "operationId": "search",
@@ -991,6 +1071,10 @@ This will:
       
       // Legacy handlers for tools not in handleToolCall
       switch (name) {
+        case 'fetch':
+          // The fetch tool is handled by handleToolCall above
+          throw new Error(`Tool ${name} should have been handled by handleToolCall`);
+          
         case 'search':
           // The search tool is handled by handleToolCall above
           throw new Error(`Tool ${name} should have been handled by handleToolCall`);
@@ -1183,6 +1267,30 @@ async function handleMCPRequest(req: any, res: any) {
 function getAuthenticatedTools(): Tool[] {
   return [
     {
+      name: 'fetch',
+      description: 'Fetch data from TeamUp API',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          resource: {
+            type: 'string',
+            enum: ['events', 'customers', 'memberships', 'staff', 'venues', 'categories'],
+            description: 'Type of resource to fetch'
+          },
+          id: {
+            type: 'string',
+            description: 'Optional ID to fetch a specific resource'
+          },
+          filters: {
+            type: 'object',
+            description: 'Optional filters for list queries',
+            additionalProperties: true
+          }
+        },
+        required: ['resource']
+      }
+    },
+    {
       name: 'search',
       description: 'Search for customers, events, or other resources in TeamUp',
       inputSchema: {
@@ -1332,6 +1440,41 @@ declare global {
     }
   }
 }
+
+// Fetch endpoint for ChatGPT
+app.get('/fetch/:resource', async (req, res) => {
+  try {
+    const { resource } = req.params;
+    const { id, page, page_size } = req.query;
+    
+    // Get token from Authorization header or use server token
+    const authHeader = req.headers.authorization;
+    let accessToken = config.accessToken;
+    
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      accessToken = authHeader.substring(7);
+    }
+    
+    if (!accessToken) {
+      return res.status(401).json({
+        error: 'No authentication token available'
+      });
+    }
+    
+    const result = await handleToolCall('fetch', {
+      resource,
+      id,
+      filters: { page, page_size }
+    }, { ...config, accessToken });
+    
+    res.json(result);
+  } catch (error: any) {
+    console.error('Fetch error:', error);
+    res.status(error.response?.status || 500).json({
+      error: error.response?.data || { message: error.message }
+    });
+  }
+});
 
 // Search endpoint for ChatGPT
 app.post('/search', async (req, res) => {
@@ -2036,6 +2179,7 @@ app.get('*', (req, res) => {
     availableEndpoints: [
       '/.well-known/mcp.json',
       '/mcp',
+      '/fetch/{resource}',
       '/search',
       '/mcp/tools',
       '/mcp/sse',
