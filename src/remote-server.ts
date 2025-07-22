@@ -73,6 +73,46 @@ async function handleToolCall(toolName: string, args: any, config: TeamUpConfig)
 
   switch (toolName) {
     case 'fetch': {
+      // Check if this is an OpenAI-style fetch (single id parameter)
+      if (typeof args === 'string' || (args.id && !args.resource)) {
+        const id = typeof args === 'string' ? args : args.id;
+        console.log(`[handleToolCall] OpenAI-style fetch for id: ${id}`);
+        
+        // Parse the ID to determine resource type
+        // Format: "resource_type:id" e.g., "event:123", "customer:456"
+        const [resourceType, resourceId] = id.includes(':') ? id.split(':') : ['event', id];
+        
+        let endpoint = '';
+        switch (resourceType) {
+          case 'event':
+          case 'events':
+            endpoint = `/events/${resourceId}`;
+            break;
+          case 'customer':
+          case 'customers':
+            endpoint = `/customers/${resourceId}`;
+            break;
+          case 'membership':
+          case 'memberships':
+            endpoint = `/memberships/${resourceId}`;
+            break;
+          default:
+            endpoint = `/events/${resourceId}`; // Default to events
+        }
+        
+        const response = await axiosInstance.get(endpoint);
+        
+        // Return OpenAI-compliant format
+        return {
+          id: id,
+          title: response.data.name || response.data.title || `${resourceType} ${resourceId}`,
+          text: JSON.stringify(response.data, null, 2),
+          url: `https://app.goteamup.com/${resourceType}/${resourceId}`,
+          metadata: response.data
+        };
+      }
+      
+      // Standard MCP fetch
       const { resource, id, filters = {} } = args;
       let endpoint = '';
       
@@ -106,6 +146,53 @@ async function handleToolCall(toolName: string, args: any, config: TeamUpConfig)
     }
       
     case 'search': {
+      // Check if this is an OpenAI-style search (single query parameter)
+      if (typeof args === 'string' || (args.query && !args.resource_type)) {
+        const query = typeof args === 'string' ? args : args.query;
+        console.log(`[handleToolCall] OpenAI-style search for query: ${query}`);
+        
+        // Search across all resources
+        const results = [];
+        
+        // Search events
+        try {
+          const eventsResponse = await axiosInstance.get('/events', {
+            params: { query, page_size: 5 }
+          });
+          if (eventsResponse.data.results) {
+            results.push(...eventsResponse.data.results.map((event: any) => ({
+              id: `event:${event.id}`,
+              title: event.name || event.title,
+              text: event.description || `Event on ${event.starts_at}`,
+              url: `https://app.goteamup.com/events/${event.id}`
+            })));
+          }
+        } catch (error) {
+          console.error('Error searching events:', error);
+        }
+        
+        // Search customers
+        try {
+          const customersResponse = await axiosInstance.get('/customers', {
+            params: { query, page_size: 5 }
+          });
+          if (customersResponse.data.results) {
+            results.push(...customersResponse.data.results.map((customer: any) => ({
+              id: `customer:${customer.id}`,
+              title: `${customer.first_name} ${customer.last_name}`,
+              text: customer.email || 'No email provided',
+              url: `https://app.goteamup.com/customers/${customer.id}`
+            })));
+          }
+        } catch (error) {
+          console.error('Error searching customers:', error);
+        }
+        
+        // Return OpenAI-compliant format
+        return results;
+      }
+      
+      // Standard MCP search
       const { resource_type, query, filters = {}, page, page_size } = args;
       let searchEndpoint = '';
       let searchParams: any = { query, page, page_size, ...filters };
@@ -1268,17 +1355,28 @@ async function handleMCPRequest(req: any, res: any) {
         break;
         
       case 'tools/list':
+        // Check if this is an OpenAI request
+        const userAgent = req.headers['user-agent'] || '';
+        const isOpenAI = userAgent.includes('openai-mcp');
+        
+        console.log(`[MCP] tools/list requested by: ${userAgent}`);
+        console.log(`[MCP] Using ${isOpenAI ? 'OpenAI' : 'standard'} tool set`);
+        
         res.json({
           jsonrpc: '2.0',
           id,
           result: {
-            tools: getAuthenticatedTools()
+            tools: isOpenAI ? getOpenAITools() : getAuthenticatedTools()
           }
         });
         break;
         
       case 'tools/call':
         const { name, arguments: args } = params;
+        
+        // Check if this is an OpenAI request
+        const isOpenAICall = (req.headers['user-agent'] || '').includes('openai-mcp');
+        console.log(`[MCP] tools/call for ${name}, OpenAI: ${isOpenAICall}`);
         
         // Use server token for authentication
         const effectiveConfig = { ...config };
@@ -1287,18 +1385,29 @@ async function handleMCPRequest(req: any, res: any) {
         }
         
         const result = await handleToolCall(name, args, effectiveConfig);
-        res.json({
-          jsonrpc: '2.0',
-          id,
-          result: {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify(result, null, 2)
-              }
-            ]
-          }
-        });
+        
+        // For OpenAI, return the result directly
+        if (isOpenAICall && (name === 'search' || name === 'fetch')) {
+          res.json({
+            jsonrpc: '2.0',
+            id,
+            result
+          });
+        } else {
+          // For standard MCP, wrap in content array
+          res.json({
+            jsonrpc: '2.0',
+            id,
+            result: {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(result, null, 2)
+                }
+              ]
+            }
+          });
+        }
         break;
         
       default:
@@ -1336,6 +1445,41 @@ async function handleMCPRequest(req: any, res: any) {
   }
 }
 
+// OpenAI Deep Research specific tools (only search and fetch)
+function getOpenAITools(): Tool[] {
+  return [
+    {
+      name: 'search',
+      description: 'Search TeamUp resources and return relevant results',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          query: { 
+            type: 'string', 
+            description: 'Search query string' 
+          }
+        },
+        required: ['query']
+      }
+    },
+    {
+      name: 'fetch',
+      description: 'Fetch the full contents of a specific TeamUp resource',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: {
+            type: 'string',
+            description: 'Unique identifier for the resource'
+          }
+        },
+        required: ['id']
+      }
+    }
+  ];
+}
+
+// Full-featured tools for standard MCP clients
 function getAuthenticatedTools(): Tool[] {
   return [
     {
