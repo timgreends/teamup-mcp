@@ -494,8 +494,20 @@ app.post('/mcp', async (req, res) => {
 });
 
 // OpenAPI specification for ChatGPT Actions
-// Only handle GET requests for OpenAPI spec
-app.get(['/.well-known/mcp.json', '/openapi.json'], (req, res) => {
+// Handle both GET and POST requests (ChatGPT sends both)
+app.all(['/.well-known/mcp.json', '/openapi.json'], (req, res) => {
+  // Log POST requests for debugging
+  if (req.method === 'POST') {
+    console.log('[OpenAPI Endpoint] POST request received');
+    console.log('[OpenAPI Endpoint] Headers:', req.headers);
+    console.log('[OpenAPI Endpoint] Body:', JSON.stringify(req.body, null, 2));
+    
+    // If it's an MCP protocol request, handle it
+    if (req.body?.jsonrpc === '2.0') {
+      console.log('[OpenAPI Endpoint] Detected MCP protocol, handling as JSON-RPC');
+      return handleMCPRequest(req, res);
+    }
+  }
   
   // Handle Railway's reverse proxy - use https in production
   const protocol = req.get('x-forwarded-proto') || req.protocol;
@@ -512,10 +524,6 @@ app.get(['/.well-known/mcp.json', '/openapi.json'], (req, res) => {
         "url": baseUrl
       }
     ],
-    "x-mcp": {
-      "endpoint": `${baseUrl}/mcp`,
-      "protocol": "2025-06-18"
-    },
     "components": {
       "securitySchemes": {
         "bearerAuth": {
