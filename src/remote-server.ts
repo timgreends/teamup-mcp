@@ -2483,11 +2483,25 @@ app.get('/oauth-test', (req, res) => {
             </p>
         </div>
         
+        <div class="section" style="background: #f0f8ff;">
+            <h2>📋 How to Get OAuth Credentials</h2>
+            <ol>
+                <li>Log in to your TeamUp account</li>
+                <li>Go to <strong>Settings → Integrations → OAuth Applications</strong></li>
+                <li>Click "Create New Application"</li>
+                <li>Set the Redirect URI to: <code>${req.get('x-forwarded-proto') || req.protocol}://${req.get('host')}/callback</code></li>
+                <li>Copy your Client ID and Client Secret</li>
+            </ol>
+        </div>
+        
         <div class="section">
             <h2>Start Authorization</h2>
             <form action="/oauth-start" method="get">
                 <label>Client ID:</label>
                 <input type="text" name="client_id" required placeholder="your-client-id">
+                
+                <label>Client Secret:</label>
+                <input type="password" name="client_secret" required placeholder="your-client-secret">
                 
                 <label>Scope:</label>
                 <select name="scope">
@@ -2510,7 +2524,7 @@ app.get('/oauth-test', (req, res) => {
 
 // OAuth start endpoint
 app.get('/oauth-start', (req, res) => {
-  const { client_id, scope } = req.query;
+  const { client_id, client_secret, scope } = req.query;
   
   // Build redirect URI - handle potential protocol issues
   const protocol = req.get('x-forwarded-proto') || req.protocol;
@@ -2528,6 +2542,7 @@ app.get('/oauth-start', (req, res) => {
   sessions.set(`oauth_${state}`, {
     id: state,
     clientId: client_id as string,
+    clientSecret: client_secret as string,
     createdAt: new Date(),
     lastAccess: new Date(),
     authState: 'waiting_for_auth'
@@ -2565,7 +2580,7 @@ app.get('/callback', async (req, res) => {
     // Exchange code for token
     const formData = new URLSearchParams();
     formData.append('client_id', (session as any).clientId || config.oauth.clientId);
-    formData.append('client_secret', config.oauth.clientSecret);
+    formData.append('client_secret', (session as any).clientSecret || config.oauth.clientSecret);
     formData.append('code', code as string);
     
     console.log('[OAuth] Exchanging code for token...');
