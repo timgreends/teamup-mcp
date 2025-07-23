@@ -149,19 +149,21 @@ async function handleToolCall(toolName: string, args: any, config: TeamUpConfig)
       
     case 'search': {
       // Check if this is an OpenAI-style search (single query parameter)
-      if (typeof args === 'string' || (args.query && !args.resource_type)) {
+      if (typeof args === 'string' || (args.query !== undefined && !args.resource_type)) {
         const query = typeof args === 'string' ? args : args.query;
-        console.log(`[handleToolCall] OpenAI-style search for query: ${query}`);
+        console.log(`[handleToolCall] OpenAI-style search for query: "${query}" (empty=${!query})`);
         
         // Search across all resources
         const results = [];
         
         // Search events
         try {
-          console.log(`[handleToolCall] Searching events with query: "${query}"`);
-          const eventsResponse = await axiosInstance.get('/events', {
-            params: { query, page_size: 5 }
-          });
+          const params: any = { page_size: 10 };
+          if (query) {
+            params.query = query;
+          }
+          console.log(`[handleToolCall] Searching events with params:`, params);
+          const eventsResponse = await axiosInstance.get('/events', { params });
           console.log(`[handleToolCall] Events response:`, eventsResponse.data);
           
           if (eventsResponse.data.results) {
@@ -178,10 +180,12 @@ async function handleToolCall(toolName: string, args: any, config: TeamUpConfig)
         
         // Search customers
         try {
-          console.log(`[handleToolCall] Searching customers with query: "${query}"`);
-          const customersResponse = await axiosInstance.get('/customers', {
-            params: { query, page_size: 5 }
-          });
+          const params: any = { page_size: 10 };
+          if (query) {
+            params.query = query;
+          }
+          console.log(`[handleToolCall] Searching customers with params:`, params);
+          const customersResponse = await axiosInstance.get('/customers', { params });
           console.log(`[handleToolCall] Customers response:`, customersResponse.data);
           
           if (customersResponse.data.results) {
@@ -198,6 +202,13 @@ async function handleToolCall(toolName: string, args: any, config: TeamUpConfig)
         
         console.log(`[handleToolCall] Total search results: ${results.length}`);
         console.log(`[handleToolCall] Results:`, JSON.stringify(results, null, 2));
+        
+        // If no results found, return a helpful message
+        if (results.length === 0) {
+          console.log(`[handleToolCall] No results found for query: "${query}"`);
+          // Return an empty array but log the issue
+          return [];
+        }
         
         // Return OpenAI-compliant format
         return results;
@@ -619,7 +630,7 @@ app.get('/oauth/authorize', (req, res) => {
   const host = req.get('host');
   const teamupAuthUrl = new URL('https://goteamup.com/api/auth/authorize');
   teamupAuthUrl.searchParams.set('client_id', config.oauth.clientId);
-  teamupAuthUrl.searchParams.set('redirect_uri', `${protocol}://${host}/oauth/callback`);
+  teamupAuthUrl.searchParams.set('redirect_uri', config.oauth.redirectUri);
   teamupAuthUrl.searchParams.set('response_type', 'code');
   teamupAuthUrl.searchParams.set('scope', config.oauth.scope);
   teamupAuthUrl.searchParams.set('state', state as string);
@@ -628,7 +639,8 @@ app.get('/oauth/authorize', (req, res) => {
   res.redirect(teamupAuthUrl.toString());
 });
 
-app.get('/oauth/callback', async (req, res) => {
+// OAuth callback - matches TEAMUP_REDIRECT_URI environment variable
+app.get('/callback', async (req, res) => {
   const { code, state, error } = req.query;
   
   console.log('[OAuth] Callback received:', { code: !!code, state, error });
@@ -819,7 +831,7 @@ app.all(['/.well-known/mcp.json', '/openapi.json'], async (req, res) => {
     "openapi": "3.1.0",
     "info": {
       "title": "TeamUp API",
-      "description": "Manage TeamUp events, customers, and memberships",
+      "description": "Manage TeamUp events, customers, and memberships. When searching, use actual names or keywords (e.g., 'john', 'yoga class') not placeholder text like 'Customer Name'.",
       "version": "1.0.0"
     },
     "servers": [
@@ -905,11 +917,46 @@ app.all(['/.well-known/mcp.json', '/openapi.json'], async (req, res) => {
           }
         }
       },
+      "/list": {
+        "get": {
+          "operationId": "listAll",
+          "summary": "List all resources of a specific type",
+          "description": "Get a list of all customers, events, or memberships without searching",
+          "parameters": [
+            {
+              "name": "resource_type",
+              "in": "query",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "enum": ["customers", "events", "memberships"]
+              },
+              "description": "Type of resource to list"
+            },
+            {
+              "name": "limit",
+              "in": "query",
+              "schema": { "type": "integer", "default": 20 },
+              "description": "Maximum number of results to return"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "List of resources",
+              "content": {
+                "application/json": {
+                  "schema": { "type": "object" }
+                }
+              }
+            }
+          }
+        }
+      },
       "/search": {
         "post": {
           "operationId": "search",
           "summary": "Search across TeamUp resources",
-          "description": "Universal search endpoint for finding customers, events, and memberships",
+          "description": "Universal search endpoint for finding customers, events, and memberships. Use actual names/keywords (e.g., 'john', 'smith', 'yoga') not placeholders. Leave query empty to list all.",
           "requestBody": {
             "required": true,
             "content": {
@@ -919,7 +966,7 @@ app.all(['/.well-known/mcp.json', '/openapi.json'], async (req, res) => {
                   "properties": {
                     "query": {
                       "type": "string",
-                      "description": "Search query string"
+                      "description": "Search query string - use actual names/keywords, not placeholder text"
                     },
                     "resource_type": {
                       "type": "string",
@@ -1678,16 +1725,16 @@ function getOpenAITools(): Tool[] {
   return [
     {
       name: 'search',
-      description: 'Search TeamUp resources and return relevant results',
+      description: 'Search TeamUp resources or list all when query is empty. Use actual names, emails, or keywords (e.g., "john", "smith", "yoga") not placeholder text. Leave query empty to list all items.',
       inputSchema: {
         type: 'object',
         properties: {
           query: { 
             type: 'string', 
-            description: 'Search query string' 
+            description: 'Search query string - use actual names/keywords, or leave empty to list all items' 
           }
         },
-        required: ['query']
+        required: []
       }
     },
     {
@@ -2614,6 +2661,74 @@ app.get('/callback', async (req, res) => {
   }
 });
 
+// List endpoint for ChatGPT
+app.get('/list', async (req, res) => {
+  try {
+    const { resource_type, limit = 20 } = req.query;
+    
+    if (!resource_type) {
+      return res.status(400).json({
+        error: 'Missing required parameter: resource_type'
+      });
+    }
+    
+    // Get token from Authorization header or use server token
+    const authHeader = req.headers.authorization;
+    let accessToken = config.accessToken;
+    
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      accessToken = authHeader.substring(7);
+    }
+    
+    if (!accessToken) {
+      return res.status(401).json({
+        error: 'No authentication token available'
+      });
+    }
+
+    const headers = {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      'Authorization': `Token ${accessToken}`,
+      ...(config.providerId && { 'TeamUp-Provider-ID': String(config.providerId) }),
+      'TeamUp-Request-Mode': config.requestMode
+    };
+    
+    const axiosInstance = axios.create({
+      baseURL: config.baseUrl,
+      headers
+    });
+    
+    let endpoint = '';
+    switch (resource_type) {
+      case 'customers':
+        endpoint = '/customers';
+        break;
+      case 'events':
+        endpoint = '/events';
+        break;
+      case 'memberships':
+        endpoint = '/memberships';
+        break;
+      default:
+        return res.status(400).json({
+          error: `Invalid resource_type: ${resource_type}`
+        });
+    }
+    
+    const response = await axiosInstance.get(endpoint, {
+      params: { page_size: limit }
+    });
+    
+    res.json(response.data);
+  } catch (error: any) {
+    console.error('List error:', error);
+    res.status(error.response?.status || 500).json({
+      error: error.response?.data || { message: error.message }
+    });
+  }
+});
+
 // Catch-all route to debug what ChatGPT is looking for
 app.get('*', (req, res) => {
   console.log(`[404] Unknown route requested: ${req.method} ${req.path}`);
@@ -2623,6 +2738,7 @@ app.get('*', (req, res) => {
     availableEndpoints: [
       '/.well-known/mcp.json',
       '/mcp',
+      '/list',
       '/fetch/{resource}',
       '/search',
       '/mcp/tools',
