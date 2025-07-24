@@ -110,7 +110,7 @@ async function handleToolCall(toolName: string, args: any, config: TeamUpConfig)
           id: id,
           title: response.data.name || response.data.title || `${resourceType} ${resourceId}`,
           text: JSON.stringify(response.data, null, 2),
-          url: `https://app.goteamup.com/${resourceType}/${resourceId}`,
+          url: ` https://goteamup.com/api/v2/${resourceType}/${resourceId}`,
           metadata: response.data
         };
       }
@@ -172,7 +172,7 @@ async function handleToolCall(toolName: string, args: any, config: TeamUpConfig)
               id: `event:${event.id}`,
               title: event.name || event.title,
               text: event.description || `Event on ${event.starts_at}`,
-              url: `https://app.goteamup.com/events/${event.id}`
+              url: ` https://goteamup.com/api/v2/events/${event.id}`
             })));
           }
         } catch (error: any) {
@@ -198,7 +198,7 @@ async function handleToolCall(toolName: string, args: any, config: TeamUpConfig)
               id: `customer:${customer.id}`,
               title: `${customer.first_name} ${customer.last_name}`,
               text: customer.email || 'No email provided',
-              url: `https://app.goteamup.com/customers/${customer.id}`
+              url: `https://goteamup.com/api/v2/customers/${customer.id}`
             })));
           }
         } catch (error: any) {
