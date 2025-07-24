@@ -70,7 +70,8 @@ async function handleToolCall(toolName: string, args: any, config: TeamUpConfig)
   
   const axiosInstance = axios.create({
     baseURL: config.baseUrl,
-    headers
+    headers,
+    timeout: 25000 // 25 second timeout for ChatGPT compatibility
   });
 
   switch (toolName) {
@@ -158,13 +159,13 @@ async function handleToolCall(toolName: string, args: any, config: TeamUpConfig)
         
         // Search events
         try {
-          const params: any = { page_size: 10 };
+          const params: any = { page_size: 5 }; // Reduced for faster response
           if (query) {
             params.query = query;
           }
           console.log(`[handleToolCall] Searching events with params:`, params);
           const eventsResponse = await axiosInstance.get('/events', { params });
-          console.log(`[handleToolCall] Events response:`, eventsResponse.data);
+          console.log(`[handleToolCall] Events response count:`, eventsResponse.data.results?.length || 0);
           
           if (eventsResponse.data.results) {
             results.push(...eventsResponse.data.results.map((event: any) => ({
@@ -175,18 +176,22 @@ async function handleToolCall(toolName: string, args: any, config: TeamUpConfig)
             })));
           }
         } catch (error: any) {
-          console.error('[handleToolCall] Error searching events:', error.response?.data || error.message);
+          if (error.code === 'ECONNABORTED') {
+            console.error('[handleToolCall] Timeout searching events');
+          } else {
+            console.error('[handleToolCall] Error searching events:', error.response?.data || error.message);
+          }
         }
         
         // Search customers
         try {
-          const params: any = { page_size: 10 };
+          const params: any = { page_size: 5 }; // Reduced for faster response
           if (query) {
             params.query = query;
           }
           console.log(`[handleToolCall] Searching customers with params:`, params);
           const customersResponse = await axiosInstance.get('/customers', { params });
-          console.log(`[handleToolCall] Customers response:`, customersResponse.data);
+          console.log(`[handleToolCall] Customers response count:`, customersResponse.data.results?.length || 0);
           
           if (customersResponse.data.results) {
             results.push(...customersResponse.data.results.map((customer: any) => ({
@@ -197,7 +202,11 @@ async function handleToolCall(toolName: string, args: any, config: TeamUpConfig)
             })));
           }
         } catch (error: any) {
-          console.error('[handleToolCall] Error searching customers:', error.response?.data || error.message);
+          if (error.code === 'ECONNABORTED') {
+            console.error('[handleToolCall] Timeout searching customers');
+          } else {
+            console.error('[handleToolCall] Error searching customers:', error.response?.data || error.message);
+          }
         }
         
         console.log(`[handleToolCall] Total search results: ${results.length}`);
@@ -1647,8 +1656,12 @@ async function handleMCPRequest(req: any, res: any) {
         const { name, arguments: args } = params;
         
         // Check if this is an OpenAI request
-        const isOpenAICall = (req.headers['user-agent'] || '').includes('openai-mcp');
-        console.log(`[MCP] tools/call for ${name}, OpenAI: ${isOpenAICall}`);
+        const toolCallUserAgent = req.headers['user-agent'] || '';
+        const isOpenAICall = toolCallUserAgent.includes('openai-mcp') || 
+                            toolCallUserAgent.includes('ChatGPT') || 
+                            toolCallUserAgent.includes('GPT') ||
+                            (name === 'search' && typeof args === 'object' && Object.keys(args).length === 1 && 'query' in args);
+        console.log(`[MCP] tools/call for ${name}, OpenAI: ${isOpenAICall}, UA: ${toolCallUserAgent}`);
         
         // Use user's token if available, otherwise fall back to server token
         const effectiveConfig = { ...config };
