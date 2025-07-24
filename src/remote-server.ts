@@ -110,7 +110,7 @@ async function handleToolCall(toolName: string, args: any, config: TeamUpConfig)
           id: id,
           title: response.data.name || response.data.title || `${resourceType} ${resourceId}`,
           text: JSON.stringify(response.data, null, 2),
-          url: ` https://goteamup.com/api/v2/${resourceType}/${resourceId}`,
+          url: `https://goteamup.com/api/v2/${resourceType}/${resourceId}`,
           metadata: response.data
         };
       }
@@ -172,14 +172,21 @@ async function handleToolCall(toolName: string, args: any, config: TeamUpConfig)
               id: `event:${event.id}`,
               title: event.name || event.title,
               text: event.description || `Event on ${event.starts_at}`,
-              url: ` https://goteamup.com/api/v2/events/${event.id}`
+              url: `https://goteamup.com/api/v2/events/${event.id}`
             })));
           }
         } catch (error: any) {
           if (error.code === 'ECONNABORTED') {
-            console.error('[handleToolCall] Timeout searching events');
+            console.error('[handleToolCall] Timeout searching events after 25 seconds');
+            console.error('[handleToolCall] Query was:', query);
           } else {
-            console.error('[handleToolCall] Error searching events:', error.response?.data || error.message);
+            console.error('[handleToolCall] Error searching events:', {
+              status: error.response?.status,
+              statusText: error.response?.statusText,
+              data: error.response?.data,
+              message: error.message,
+              code: error.code
+            });
           }
         }
         
@@ -203,9 +210,16 @@ async function handleToolCall(toolName: string, args: any, config: TeamUpConfig)
           }
         } catch (error: any) {
           if (error.code === 'ECONNABORTED') {
-            console.error('[handleToolCall] Timeout searching customers');
+            console.error('[handleToolCall] Timeout searching customers after 25 seconds');
+            console.error('[handleToolCall] Query was:', query);
           } else {
-            console.error('[handleToolCall] Error searching customers:', error.response?.data || error.message);
+            console.error('[handleToolCall] Error searching customers:', {
+              status: error.response?.status,
+              statusText: error.response?.statusText,
+              data: error.response?.data,
+              message: error.message,
+              code: error.code
+            });
           }
         }
         
